@@ -1,0 +1,232 @@
+{
+ "repo": "astral-sh/uv",
+ "seed": 7,
+ "tickets": [
+  {
+   "number": 1495,
+   "role": "first",
+   "created_at": "2024-02-16T14:49:37Z"
+  },
+  {
+   "number": 1910,
+   "role": "first",
+   "created_at": "2024-02-23T12:26:49Z"
+  },
+  {
+   "number": 2500,
+   "role": "first",
+   "created_at": "2024-03-17T21:18:44Z"
+  },
+  {
+   "number": 3095,
+   "role": "first",
+   "created_at": "2024-04-17T16:20:17Z"
+  },
+  {
+   "number": 4422,
+   "role": "first",
+   "created_at": "2024-06-20T11:27:07Z"
+  },
+  {
+   "number": 5107,
+   "role": "first",
+   "created_at": "2024-07-16T14:34:16Z"
+  },
+  {
+   "number": 6794,
+   "role": "first",
+   "created_at": "2024-08-29T06:28:27Z"
+  },
+  {
+   "number": 7552,
+   "role": "first",
+   "created_at": "2024-09-19T14:25:11Z"
+  },
+  {
+   "number": 10008,
+   "role": "first",
+   "created_at": "2024-12-18T18:10:18Z"
+  },
+  {
+   "number": 10056,
+   "role": "new",
+   "created_at": "2024-12-20T14:53:44Z"
+  },
+  {
+   "number": 10238,
+   "role": "new",
+   "created_at": "2024-12-30T12:58:38Z"
+  },
+  {
+   "number": 10281,
+   "role": "repeat",
+   "expect": 4422,
+   "created_at": "2025-01-02T23:23:45Z"
+  },
+  {
+   "number": 10951,
+   "role": "repeat",
+   "expect": 5107,
+   "created_at": "2025-01-25T00:25:34Z"
+  },
+  {
+   "number": 11027,
+   "role": "repeat",
+   "expect": 6794,
+   "created_at": "2025-01-28T17:47:49Z"
+  },
+  {
+   "number": 11273,
+   "role": "first",
+   "created_at": "2025-02-06T04:51:21Z"
+  },
+  {
+   "number": 11300,
+   "role": "repeat",
+   "expect": 6794,
+   "created_at": "2025-02-06T23:46:22Z"
+  },
+  {
+   "number": 11458,
+   "role": "repeat",
+   "expect": 11273,
+   "created_at": "2025-02-12T18:40:47Z"
+  },
+  {
+   "number": 11476,
+   "role": "repeat",
+   "expect": 1495,
+   "created_at": "2025-02-13T12:15:01Z"
+  },
+  {
+   "number": 11679,
+   "role": "repeat",
+   "expect": 6794,
+   "created_at": "2025-02-20T21:06:39Z"
+  },
+  {
+   "number": 11835,
+   "role": "repeat",
+   "expect": 1910,
+   "created_at": "2025-02-27T16:03:38Z"
+  },
+  {
+   "number": 12146,
+   "role": "repeat",
+   "expect": 1495,
+   "created_at": "2025-03-13T01:21:35Z"
+  },
+  {
+   "number": 12581,
+   "role": "repeat",
+   "expect": 10008,
+   "created_at": "2025-03-31T09:42:39Z"
+  },
+  {
+   "number": 13371,
+   "role": "repeat",
+   "expect": 10008,
+   "created_at": "2025-05-10T00:06:30Z"
+  },
+  {
+   "number": 14123,
+   "role": "repeat",
+   "expect": 3095,
+   "created_at": "2025-06-18T02:40:34Z"
+  },
+  {
+   "number": 14138,
+   "role": "new",
+   "created_at": "2025-06-18T19:26:37Z"
+  },
+  {
+   "number": 14308,
+   "role": "new",
+   "created_at": "2025-06-27T09:56:04Z"
+  },
+  {
+   "number": 14574,
+   "role": "first",
+   "created_at": "2025-07-12T07:28:11Z"
+  },
+  {
+   "number": 14635,
+   "role": "repeat",
+   "expect": 1910,
+   "created_at": "2025-07-15T19:21:19Z"
+  },
+  {
+   "number": 15238,
+   "role": "first",
+   "created_at": "2025-08-12T12:54:27Z"
+  },
+  {
+   "number": 15394,
+   "role": "repeat",
+   "expect": 10008,
+   "created_at": "2025-08-20T16:48:54Z"
+  },
+  {
+   "number": 15455,
+   "role": "repeat",
+   "expect": 7552,
+   "created_at": "2025-08-22T14:59:11Z"
+  },
+  {
+   "number": 15960,
+   "role": "repeat",
+   "expect": 1495,
+   "created_at": "2025-09-20T15:06:37Z"
+  },
+  {
+   "number": 16122,
+   "role": "repeat",
+   "expect": 2500,
+   "created_at": "2025-10-04T05:00:30Z"
+  },
+  {
+   "number": 16413,
+   "role": "repeat",
+   "expect": 14574,
+   "created_at": "2025-10-22T21:52:41Z"
+  },
+  {
+   "number": 16541,
+   "role": "repeat",
+   "expect": 2500,
+   "created_at": "2025-10-31T19:07:05Z"
+  },
+  {
+   "number": 16842,
+   "role": "repeat",
+   "expect": 1910,
+   "created_at": "2025-11-25T07:15:08Z"
+  },
+  {
+   "number": 17041,
+   "role": "new",
+   "created_at": "2025-12-09T02:02:40Z"
+  },
+  {
+   "number": 17230,
+   "role": "new",
+   "created_at": "2025-12-23T17:56:01Z"
+  },
+  {
+   "number": 19602,
+   "role": "new",
+   "created_at": "2026-05-29T08:50:17Z"
+  },
+  {
+   "number": 19988,
+   "role": "new",
+   "created_at": "2026-06-25T12:34:56Z"
+  },
+  {
+   "number": 20907,
+   "role": "repeat",
+   "expect": 15238,
+   "created_at": "2026-08-03T10:07:04Z"
+  }
+ ]
+}

@@ -133,10 +133,10 @@ class Crew:
             runs.append(reviewer)
             record["reply"] = solver.answer.get("reply")
             record["approved"] = reviewer.answer.get("approved")
-            learning = reviewer.answer.get("learning")
-            if not known and learning:
-                record["learning"] = learning
-                record["learning_id"] = self._save_learning(number, learning, reviewer_ids)
+            new_learning = reviewer.answer.get("learning")
+            if not known and new_learning:
+                record["learning"] = new_learning
+                record["learning_id"] = self._save_learning(number, new_learning, reviewer_ids)
             record["maintainer_needed"] = not known
         record["runs"] = [asdict(r) | {"tokens": r.tokens} for r in runs]
         return record

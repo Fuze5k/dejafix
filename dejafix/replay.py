@@ -6,7 +6,9 @@ maintainers' real reply is the human decision, the reviewer writes the learning 
 then is it saved (memory_add) and promoted into the datapack's collective memory (memory_promote).
 Agents only read Meko; every write is the pipeline's, after review.
 
-Usage: uv run python -m dejafix.replay --tickets 6794:full,11300:triage --max-runs 10
+Memory off (the cold run): no learning is looked up or saved, so every ticket takes the full path.
+
+Usage: uv run python -m dejafix.replay --datapack dejafix-uv --tickets 6794:full,11300:triage --max-runs 10
 """
 
 from __future__ import annotations
@@ -15,12 +17,13 @@ import argparse
 import base64
 import json
 import re
+from collections import defaultdict
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
 from dejafix.agents import RUNS, AgentRun, run_agent
-from dejafix.load_docs import STATE
+from dejafix.load_docs import loaded_datapack
 from dejafix.meko import Meko
 from dejafix.tickets import load_links, load_pool, load_stream, maintainer_replies, ticket_text
 
@@ -34,11 +37,14 @@ def issue_number(value: Any) -> int | None:
 
 
 class Crew:
-    def __init__(self, meko: Meko, datapack_id: str, max_runs: int, links: dict[int, int]) -> None:
+    def __init__(
+        self, meko: Meko, datapack_id: str, max_runs: int, links: dict[int, int], *, memory: bool
+    ) -> None:
         self.meko = meko
         self.datapack_id = datapack_id
         self.runs_left = max_runs
         self.links = links
+        self.memory = memory
         self.tools = [t["name"] for t in meko.tools()]
 
     def cluster(self, number: int | None) -> int | None:
@@ -99,10 +105,12 @@ class Crew:
         triage, _ = self._run("triage", number, text)
         runs.append(triage)
         named = issue_number(triage.answer.get("known_issue"))
-        learning = self.learning_of(named) if triage.answer.get("verdict") == "known" and named else None
+        claims_known = triage.answer.get("verdict") == "known" and named is not None
+        learning = self.learning_of(named) if self.memory and claims_known else None
         known = learning is not None
         record: dict[str, Any] = {
             "ticket": number,
+            "memory": self.memory,
             "stream_role": ticket["role"],
             "expect": ticket.get("expect"),
         }
@@ -134,7 +142,7 @@ class Crew:
             record["reply"] = solver.answer.get("reply")
             record["approved"] = reviewer.answer.get("approved")
             new_learning = reviewer.answer.get("learning")
-            if not known and new_learning:
+            if self.memory and not known and new_learning:
                 record["learning"] = new_learning
                 record["learning_id"] = self._save_learning(number, new_learning, reviewer_ids)
             record["maintainer_needed"] = not known
@@ -171,23 +179,67 @@ class Crew:
         )
 
 
+def summary(records: list[dict[str, Any]]) -> str:
+    """Tokens, cost and runs per role, and how many tickets triage got right, per stream role."""
+    per_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        for run in record["runs"]:
+            per_role[run["role"]].append(run)
+    lines = []
+    for role, runs in per_role.items():
+        tokens = sum(r["tokens"] for r in runs)
+        cost = sum(r["cost_usd"] for r in runs)
+        lines.append(
+            f"{role}: {len(runs)} runs, {tokens / 1000:.1f}k tokens (avg {tokens / len(runs) / 1000:.1f}k), ${cost:.4f}"
+        )
+    for kind in ("first", "repeat", "new"):
+        group = [r for r in records if r["stream_role"] == kind]
+        if group:
+            right = sum(bool(r["correct"]) for r in group)
+            exact = f", exact {sum(bool(r.get('exact')) for r in group)}" if kind == "repeat" else ""
+            lines.append(f"{kind}: {right}/{len(group)} right{exact}")
+    calls = [c for runs in per_role.values() for r in runs for c in r["calls"]]
+    loose = sum(c.get("force_source") != "knowledge_base" for c in calls if c["tool"] == "context_search")
+    lines.append(f"Meko calls: {len(calls)}, context_search without force_source=knowledge_base: {loose}")
+    total = sum(r["tokens"] for runs in per_role.values() for r in runs)
+    cost = sum(r["cost_usd"] for runs in per_role.values() for r in runs)
+    lines.append(
+        f"total: {sum(len(v) for v in per_role.values())} runs, {total / 1000:.1f}k tokens, ${cost:.4f}"
+    )
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--datapack", default="dejafix-uv")
+    parser.add_argument("--memory", choices=("on", "off"), default="on")
     parser.add_argument("--tickets", required=True, help="number:full|triage, comma-separated, in order")
     parser.add_argument("--max-runs", type=int, default=10)
+    parser.add_argument("--max-tokens", type=int, help="stop after the ticket that takes the batch past this")
     args = parser.parse_args()
     plan = [(int(n), steps) for n, steps in (item.split(":") for item in args.tickets.split(","))]
     stream = {t["number"]: t for t in load_stream()}
     pool = load_pool()
     links = load_links()
-    datapack_id = json.loads(STATE.read_text())["datapack_id"]
+    datapack_id = loaded_datapack(args.datapack)["datapack_id"]
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    out = RUNS / f"replay-{stamp}.jsonl"
+    out = RUNS / f"replay-{args.datapack}-{args.memory}-{stamp}.jsonl"
     records = []
     with Meko() as meko:
-        crew = Crew(meko, datapack_id, args.max_runs, links)
+        crew = Crew(meko, datapack_id, args.max_runs, links, memory=args.memory == "on")
+        failures = 0
         for number, steps in plan:
-            record = crew.handle(stream[number], pool[number], steps)
+            try:
+                record = crew.handle(stream[number], pool[number], steps)
+            except (RuntimeError, TypeError) as exc:
+                # One agent's failure costs its ticket, not the batch; two in a row stop it.
+                failures += 1
+                print(f"ERROR uv#{number}: {exc}")
+                if failures >= 2:
+                    print("STOPPED: two tickets in a row failed")
+                    break
+                continue
+            failures = 0
             records.append(record)
             with out.open("a") as f:
                 f.write(json.dumps(record) + "\n")
@@ -195,7 +247,12 @@ def main() -> None:
             print(
                 f"uv#{number} {record['stream_role']}: triage {record['triage']} correct={record['correct']} | {tokens}"
             )
-        artifact = crew.save_report(records, f"replay-{stamp}.json")
+            spent = sum(r["tokens"] for rec in records for r in rec["runs"])
+            if args.max_tokens and spent > args.max_tokens:
+                print(f"STOPPED: {spent} tokens after uv#{number}, over the batch limit {args.max_tokens}")
+                break
+        artifact = crew.save_report(records, out.with_suffix(".json").name)
+    print(summary(records))
     print(f"{len(records)} tickets -> {out}; artifact {artifact['content_hash'][:12]}")
 
 

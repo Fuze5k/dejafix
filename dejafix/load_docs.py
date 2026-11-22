@@ -1,6 +1,8 @@
 """Load a repository's Markdown docs, pinned to one commit, into a Meko datapack's knowledge base.
 
-Usage: uv run python -m dejafix.load_docs --repo astral-sh/uv --datapack dejafix-uv
+Usage: uv run python -m dejafix.load_docs --datapack dejafix-uv
+
+Every datapack gets the same docs (one pinned commit, DOCS_REF), so runs on different datapacks compare.
 """
 
 from __future__ import annotations
@@ -14,7 +16,16 @@ from dejafix.github import rest
 from dejafix.meko import Meko, MekoError
 
 CACHE = Path(__file__).resolve().parent.parent / "data" / "cache"
-STATE = Path(__file__).resolve().parent.parent / "data" / "datapack.json"
+STATE = Path(__file__).resolve().parent.parent / "data" / "datapacks.json"
+DOCS_REF = "264d8b4a5e10d195d2cc2a34dffa807cfbe6298c"  # astral-sh/uv main on 2026-11-22
+
+
+def loaded_datapack(name: str) -> dict[str, str]:
+    """The datapack `name` as load_docs recorded it: its id and the docs it holds."""
+    state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    if name not in state:
+        raise KeyError(f"datapack {name!r} has no docs loaded: run dejafix.load_docs --datapack {name}")
+    return state[name]
 
 
 def fetch_docs(repo: str, ref: str, folder: str) -> tuple[str, list[Path]]:
@@ -58,7 +69,7 @@ def ensure_datapack(meko: Meko, name: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default="astral-sh/uv")
-    parser.add_argument("--ref", default="main")
+    parser.add_argument("--ref", default=DOCS_REF)
     parser.add_argument("--folder", default="docs")
     parser.add_argument("--datapack", default="dejafix-uv")
     args = parser.parse_args()
@@ -91,11 +102,9 @@ def main() -> None:
         info = meko.call("datapack_describe", datapack_id=datapack_id, conversation_id=ids["conversation_id"])
     if pending or failed:
         raise MekoError(f"not indexed: {len(pending)} pending, failed: {failed}")
-    STATE.write_text(
-        json.dumps(
-            {"datapack_id": datapack_id, "name": args.datapack, "docs": f"{args.repo}@{sha}"}, indent=1
-        )
-    )
+    state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    state[args.datapack] = {"datapack_id": datapack_id, "docs": f"{args.repo}@{sha}"}
+    STATE.write_text(json.dumps(state, indent=1))
     print(
         f"datapack {args.datapack}: {info.get('knowledge_chunk_count')} chunks from {len(files)} files -> {STATE}"
     )

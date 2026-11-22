@@ -31,9 +31,13 @@ DejaFix runs on a local [Meko](https://github.com/yugabyte/meko) server (no acco
 ```sh
 curl -fsSL https://mekodata.ai/install.sh | sh -s -- --no-service --non-interactive
 scripts/meko-start.sh                         # starts Meko with usage stats off (Meko's and ONNX Runtime's)
-uv run python -m dejafix.load_docs            # uv's docs, pinned to one commit, into the datapack's knowledge base
-uv run python -m dejafix.replay --tickets 6794:full,11027:full --max-runs 6
+uv run python -m dejafix.load_docs --datapack dejafix-uv-warm   # uv's docs, pinned to one commit
+uv run python -m dejafix.replay --datapack dejafix-uv-warm --tickets 6794:full,11027:full --max-runs 6
 ```
+
+`--memory off` runs the same crew without shared memory (no learning is looked up or saved: the cold run);
+`--max-tokens` stops a batch once it has spent that many. `dejafix.baseline` runs the same tickets without
+Meko, one call each with all the docs and every earlier ticket's maintainer reply in the prompt.
 
 Each ticket goes through three agents, each its own `agent_id` on one datapack:
 

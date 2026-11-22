@@ -4,4 +4,4 @@ runs/
 __pycache__/
 *.pyc
 .env
-data/datapack.json
+data/datapacks.json

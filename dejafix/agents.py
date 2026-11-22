@@ -131,6 +131,7 @@ class AgentRun:
     cost_usd: float
     models: list[str] = field(default_factory=list)
     calls: list[dict[str, Any]] = field(default_factory=list)
+    attempts: int = 1
 
     @property
     def tokens(self) -> int:
@@ -155,6 +156,12 @@ def _answer(result: dict[str, Any]) -> dict[str, Any]:
     return answer
 
 
+USAGE_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+# Haiku now and then garbles the StructuredOutput call (one field swallows the next) and repeats the same
+# mistake on the CLI's own retries; a fresh run does not carry the bad attempt, so it gets one more.
+SCHEMA_FAILED = "error_max_structured_output_retries"
+
+
 def run_agent(
     role: str,
     task: str,
@@ -165,7 +172,7 @@ def run_agent(
     context: str = "",
 ) -> AgentRun:
     """One headless run; `tools` narrows the role's Meko tools (an empty list: none); `context` is
-    appended to the system prompt (the baseline's docs)."""
+    appended to the system prompt (the baseline's docs). The usage of a failed attempt counts too."""
     spec = ROLES[role]
     granted = spec["tools"] if tools is None else [t for t in tools if t in spec["tools"]]
     allowed = [f"mcp__meko__{t}" for t in granted]
@@ -173,33 +180,43 @@ def run_agent(
     use_meko = spec.get("mcp", True)
     system = (COMMON.format(**ids) + "\n\n" if use_meko else "") + spec["prompt"] + context
     RUNS.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="dejafix-agent-") as cwd:
-        # A file, not an argument: the baseline's prompt (all the docs) is larger than the argument limit.
-        system_file = Path(cwd) / "system.md"
-        system_file.write_text(system)
-        args = [
-            "claude", "-p", "--model", spec["model"], "--output-format", "stream-json", "--verbose",
-            "--system-prompt-file", str(system_file), "--tools", "", "--strict-mcp-config",
-            "--setting-sources", "project", "--no-session-persistence", "--disable-slash-commands",
-        ]  # fmt: skip
-        if use_meko:
-            args += ["--mcp-config", str(_mcp_config(Path(cwd) / "mcp.json"))]
-        args += ["--json-schema", json.dumps(spec["schema"])]
-        if allowed:
-            args += ["--allowedTools", ",".join(allowed)]
-        if blocked:
-            args += ["--disallowedTools", ",".join(blocked)]
-        env = {**os.environ, "ENABLE_TOOL_SEARCH": "false"}
-        if use_meko:
-            env["MEKO_TOKEN"] = client_token()
-        started = time.monotonic()
-        proc = subprocess.run(
-            args, input=task, cwd=cwd, env=env, check=False, capture_output=True, text=True, timeout=600
-        )
-        seconds = time.monotonic() - started
-    events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    usage = dict.fromkeys(USAGE_KEYS, 0)
+    cost = seconds = 0.0
+    for attempt in (1, 2):
+        with tempfile.TemporaryDirectory(prefix="dejafix-agent-") as cwd:
+            # A file, not an argument: the baseline's prompt (all the docs) is larger than the argument limit.
+            system_file = Path(cwd) / "system.md"
+            system_file.write_text(system)
+            args = [
+                "claude", "-p", "--model", spec["model"], "--output-format", "stream-json", "--verbose",
+                "--system-prompt-file", str(system_file), "--tools", "", "--strict-mcp-config",
+                "--setting-sources", "project", "--no-session-persistence", "--disable-slash-commands",
+                "--json-schema", json.dumps(spec["schema"]),
+            ]  # fmt: skip
+            if use_meko:
+                args += ["--mcp-config", str(_mcp_config(Path(cwd) / "mcp.json"))]
+            if allowed:
+                args += ["--allowedTools", ",".join(allowed)]
+            if blocked:
+                args += ["--disallowedTools", ",".join(blocked)]
+            env = {**os.environ, "ENABLE_TOOL_SEARCH": "false"}
+            if use_meko:
+                env["MEKO_TOKEN"] = client_token()
+            started = time.monotonic()
+            proc = subprocess.run(
+                args, input=task, cwd=cwd, env=env, check=False, capture_output=True, text=True, timeout=600
+            )
+            seconds += time.monotonic() - started
+        events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+        result = next((e for e in reversed(events) if e.get("type") == "result"), None)
+        for key in USAGE_KEYS:
+            usage[key] += (result or {}).get("usage", {}).get(key, 0)
+        cost += (result or {}).get("total_cost_usd", 0.0)
+        if attempt == 1 and result is not None and result.get("subtype") == SCHEMA_FAILED:
+            (RUNS / f"{label}-failed.jsonl").write_text(proc.stdout)
+            continue
+        break
     (RUNS / f"{label}.jsonl").write_text(proc.stdout)
-    result = next((e for e in reversed(events) if e.get("type") == "result"), None)
     if proc.returncode != 0 or result is None or result.get("is_error"):
         raise RuntimeError(
             f"{label}: claude exit {proc.returncode}: {proc.stderr[-500:]} {str(result)[:500]}"
@@ -222,7 +239,6 @@ def run_agent(
         }
         for u in uses
     ]
-    usage = result.get("usage", {})
     return AgentRun(
         role=role,
         model=spec["model"],
@@ -230,16 +246,9 @@ def run_agent(
         seconds=round(seconds, 1),
         turns=result.get("num_turns", 0),
         tool_calls=len(uses),
-        usage={
-            k: usage.get(k, 0)
-            for k in (
-                "input_tokens",
-                "cache_creation_input_tokens",
-                "cache_read_input_tokens",
-                "output_tokens",
-            )
-        },
-        cost_usd=result.get("total_cost_usd", 0.0),
+        usage=usage,
+        cost_usd=cost,
         models=sorted(result.get("modelUsage", {})),
         calls=calls,
+        attempts=attempt,
     )

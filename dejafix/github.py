@@ -31,3 +31,13 @@ def graphql(query: str, **variables: Any) -> dict[str, Any]:
         raise GitHubError(f"gh api graphql failed: {proc.stderr.strip()[:500]}")
     raise GitHubError("gh api graphql: retries exhausted")
 
+
+def rest(path: str, *, raw: bool = False) -> Any:
+    """GET one REST path with `gh api`: parsed JSON, or the body as text with `raw`."""
+    args = ["gh", "api", path]
+    if raw:
+        args += ["-H", "Accept: application/vnd.github.raw"]
+    proc = subprocess.run(args, check=False, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise GitHubError(f"gh api {path} failed: {proc.stderr.strip()[:500]}")
+    return proc.stdout if raw else json.loads(proc.stdout)

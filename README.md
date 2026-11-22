@@ -22,3 +22,31 @@ uv run python -m dejafix.build_stream                        # picks the scored 
 `data/stream.json` holds issue numbers and labels only: `first` (the first time a problem shows up), `repeat` (a
 later issue a maintainer closed as a duplicate of it) and `new` (an unrelated issue the agents must not call a known
 one). The current stream: 41 tickets, 12 first, 21 repeat, 8 new, from 2024-02 to 2026-08.
+
+## Running the crew
+
+DejaFix runs on a local [Meko](https://github.com/yugabyte/meko) server (no account needed) and headless
+[Claude Code](https://docs.claude.com/en/docs/claude-code) agents.
+
+```sh
+curl -fsSL https://mekodata.ai/install.sh | sh -s -- --no-service --non-interactive
+scripts/meko-start.sh                         # starts Meko with usage stats off (Meko's and ONNX Runtime's)
+uv run python -m dejafix.load_docs            # uv's docs, pinned to one commit, into the datapack's knowledge base
+uv run python -m dejafix.replay --tickets 6794:full,11027:full --max-runs 6
+```
+
+Each ticket goes through three agents, each its own `agent_id` on one datapack:
+
+- **triage** searches Meko (`context_search`: knowledge base, learnings, the crew's past conversations) and says
+  whether the issue is a known one, answered by the docs, or new;
+- **solver** drafts the reply: it reuses a known fix, or researches the docs;
+- **reviewer** checks the draft against the evidence. When the issue was not a known one, the uv maintainers' real
+  reply on it is the human decision: the reviewer writes the learning from it, and only then the pipeline saves it
+  (`memory_add`) and promotes it into the datapack's collective memory (`memory_promote`).
+
+Agents only read Meko; every write (conversations with each turn's reasoning and plan, learnings, the run report
+as an artifact) is the pipeline's. Each agent is a `claude -p` run in an empty folder, with no built-in tools and only
+its role's Meko tools, so its token count is the agent's own work. Raw run logs go to `runs/` (not committed).
+
+The docs are today's (one pinned commit), not the docs as they were when each issue was opened: both cold and warm
+runs get the same docs, so the comparison stays fair, but a docs answer can be newer than the issue.

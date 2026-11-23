@@ -143,6 +143,15 @@ uv run python -m dejafix.amp --datapack dejafix-uv-final --replay cold=results/c
     --replay stuffed=results/baseline.jsonl --judge results/judge.jsonl
 ```
 
+**A pack to query.** `dejafix.learnings_pack` copies the final run's 22 approved learnings into a datapack of
+their own, `dejafix-uv-learnings`: one plain-text document per learning, with a link to its issue, and one saying
+what the pack is. The crew's conversations, which quote the issues, stay out; the pack holds no conversations and
+no memories.
+
+```sh
+uv run python -m dejafix.learnings_pack --datapack dejafix-uv-learnings --replay results/warm.jsonl
+```
+
 The writer endpoint of the Postgres cluster accepts only the address it was built from, and its password lives
 in that one process: a later run rebuilds the cluster.
 

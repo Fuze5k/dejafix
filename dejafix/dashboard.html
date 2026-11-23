@@ -453,7 +453,10 @@ document.getElementById("chart-caption").textContent =
     "The stuffed prompt is one call per ticket with all uv docs (about 207k tokens) and every earlier ticket's opening and maintainer reply. It grows by about 330 tokens per earlier ticket.",
     "The judge (the same model) grades the three drafts blind, in a shuffled order per ticket, against the maintainers' replies on the issue and, for a repeat, on the issue it duplicates.",
     "The docs are today's, not the docs as they were when each issue was opened; every system gets the same docs.",
+    "What this page shows: issue numbers, titles and links from GitHub, and the agents' and the judge's own text, which may quote a line of an issue or of the uv docs (MIT or Apache-2.0). Issue bodies and maintainer replies are not copied here: open the issue on GitHub.",
   ].forEach((text) => list.append(el("li", {}, text)));
+  list.append(el("li", {}, "Code, records and how to run it again: ",
+    el("a", { href: "https://github.com/Fuze5k/dejafix" }, "github.com/Fuze5k/dejafix"), "."));
 })();
 </script>
 </body>

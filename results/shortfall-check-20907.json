@@ -1,0 +1,18 @@
+{
+ "datapack": "dejafix-uv-warm",
+ "ticket": 20907,
+ "canonical": 15238,
+ "queries": [
+  "File collisions between two distributions are resolved silently, survive uninstall of both, and uv sync neither detects nor restores the missing files",
+  "file collision RECORD missing files uv sync"
+ ],
+ "rank_before": [
+  null,
+  2
+ ],
+ "rank_after": [
+  1,
+  2
+ ],
+ "memory_id": "2601c7c8-28bd-4032-927a-550ed6f7cdd6"
+}

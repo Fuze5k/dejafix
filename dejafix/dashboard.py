@@ -3,8 +3,8 @@
 It compares the cold crew, the warm crew and the context-stuffing baseline on the same tickets, shows
 every ticket's trace (each agent's Meko calls, reasoning and plan) and which learning a repeat reused.
 
-Usage: uv run python -m dejafix.dashboard --cold runs/cold-41.jsonl --warm runs/<warm>.jsonl \\
-    --baseline runs/<baseline>.jsonl --judge runs/<judge>.jsonl --out site/index.html
+Usage: uv run python -m dejafix.dashboard --cold results/cold.jsonl --warm results/warm.jsonl \\
+    --baseline results/baseline.jsonl --judge results/judge.jsonl --out docs/index.html
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     for name in (*SYSTEMS, "judge"):
         parser.add_argument(f"--{name}", type=Path, required=name != "judge")
-    parser.add_argument("--out", type=Path, default=Path("site/index.html"))
+    parser.add_argument("--out", type=Path, default=Path("docs/index.html"))
     args = parser.parse_args()
     data = build({name: getattr(args, name) for name in (*SYSTEMS, "judge")})
     # Inside <script>: "</" would end the element early; issue titles and replies are untrusted text.

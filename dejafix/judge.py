@@ -3,8 +3,8 @@
 One Haiku call per ticket sees the three drafts blind (labelled A, B, C in a per-ticket random order)
 with the maintainers' replies on the issue and, for a repeat, on the issue it duplicates.
 
-Usage: uv run python -m dejafix.judge --cold runs/cold-41.jsonl --warm runs/<warm>.jsonl \\
-    --baseline runs/<baseline>.jsonl --max-tokens 540000
+Usage: uv run python -m dejafix.judge --cold results/cold.jsonl --warm results/warm.jsonl \\
+    --baseline results/baseline.jsonl --max-tokens 540000
 """
 
 from __future__ import annotations

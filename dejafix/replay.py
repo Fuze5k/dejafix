@@ -17,13 +17,16 @@ import argparse
 import base64
 import json
 import re
+import tempfile
+import time
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from dejafix.agents import RUNS, AgentRun, run_agent
-from dejafix.load_docs import loaded_datapack
+from dejafix.load_docs import document_state, loaded_datapack
 from dejafix.meko import Meko
 from dejafix.tickets import load_links, load_pool, load_stream, maintainer_replies, ticket_text
 
@@ -31,6 +34,7 @@ LEARNING_PREFIX = "Known issue uv#{}:"
 KNOWN_PREFIX = re.compile(r"^Known issue uv#\d+:\s*")
 
 MAINTAINER_CHARS = 3000
+LEARNING_INDEX_TIMEOUT = 600  # seconds for Meko Cloud to index a learning filed as a document
 
 
 def issue_number(value: Any) -> int | None:
@@ -41,14 +45,19 @@ def issue_number(value: Any) -> int | None:
 
 class Crew:
     def __init__(
-        self, meko: Meko, datapack_id: str, max_runs: int, links: dict[int, int], *, memory: bool
+        self, meko: Meko, datapack_id: str, max_runs: int, links: dict[int, int], *, memory: bool, cloud: bool
     ) -> None:
         self.meko = meko
         self.datapack_id = datapack_id
+        self.cloud = cloud
         self.runs_left = max_runs
         self.links = links
         self.memory = memory
         self.tools = [t["name"] for t in meko.tools()]
+
+    def _metadata(self, metadata: dict[str, Any]) -> dict[str, Any] | str:
+        """Meko Cloud takes metadata as a JSON string; the local Meko takes the object."""
+        return json.dumps(metadata) if self.cloud else metadata
 
     def cluster(self, number: int | None) -> int | None:
         """The canonical issue a maintainer closed this one as a duplicate of (itself when none)."""
@@ -62,7 +71,17 @@ class Crew:
     def learning_of(self, issue: int) -> str | None:
         """The approved learnings saved for `issue` (the first one, then other reports of it), from the
         datapack's collective memory."""
-        promoted = self.meko.call("memory_get_all", **self._harness_ids(), promoted=True)["promoted_memories"]
+        ids, by_id, page, pages = self._harness_ids(), {}, 1, 1
+        # Meko Cloud pages the list (page_size up to 100). The local Meko, while linked to Meko Cloud, answers
+        # page 1 of 20 whatever page is asked (checked 2026-11-23): a page with nothing new ends the loop.
+        while page <= pages:
+            reply = self.meko.call("memory_get_all", **ids, promoted=True, page=page, page_size=100)
+            new = {m["id"]: m for m in reply["promoted_memories"] if m["id"] not in by_id}
+            if not new:
+                break
+            by_id |= new
+            page, pages = page + 1, reply.get("total_pages", 1)
+        promoted = list(by_id.values())
         prefix = LEARNING_PREFIX.format(issue)
         texts = [m["data"] for m in sorted(promoted, key=lambda m: m.get("created_at") or "")]
         found = [t for t in texts if t.startswith(prefix)]
@@ -106,21 +125,37 @@ class Crew:
             "conversation_id": self._conversation(agent_id, number, f"uv#{number} {role}"),
         }
         run = run_agent(role, task, ids, self.tools, label=f"{number}-{role}", tools=tools)
-        self.meko.call(
+        metadata = {
+            "model": run.models,
+            "usage": run.usage,
+            "tool_calls": run.tool_calls,
+            "seconds": run.seconds,
+        }
+        plan = str(run.answer.get("plan") or "")
+        message = self.meko.call(
             "conversation_add_message",
             **ids,
             input=task,
             output=json.dumps(run.answer),
             reasoning=str(run.answer.get("reasoning", "")),
-            plan=str(run.answer.get("plan", "")),
-            metadata={
-                "model": run.models,
-                "usage": run.usage,
-                "tool_calls": run.tool_calls,
-                "seconds": run.seconds,
-            },
+            # Meko Cloud takes the plan as a list of sentences; the local Meko takes a string.
+            plan=([plan] if plan else None) if self.cloud else plan,
+            metadata=self._metadata(metadata),
             seed=f"{number}-{role}",
         )
+        if self.cloud:
+            # Meko Cloud keeps a trace per conversation: the agent's model spend goes on it, per turn.
+            self.meko.call(
+                "track_token_usage",
+                **{k: ids[k] for k in ("datapack_id", "conversation_id")},
+                name=f"{role} LLM Response",
+                model=",".join(run.models) or run.model,
+                input_tokens=run.usage["input_tokens"]
+                + run.usage["cache_creation_input_tokens"]
+                + run.usage["cache_read_input_tokens"],
+                output_tokens=run.usage["output_tokens"],
+                message_id=message["message_id"],
+            )
         return run, ids
 
     def handle(self, ticket: dict[str, Any], issue: dict[str, Any], steps: str) -> dict[str, Any]:
@@ -188,6 +223,8 @@ class Crew:
                         "rank_before": before,
                         "rank_after": self.learning_ranks(canonical, queries),
                     }
+                    if self.cloud:
+                        record["shortfall"]["selflearning"] = self.verify_searches(queries)
             record["maintainer_needed"] = not known
         record["runs"] = [asdict(r) | {"tokens": r.tokens} for r in runs]
         return record
@@ -206,12 +243,14 @@ class Crew:
             "memory_add",
             **ids,
             text=f"{LEARNING_PREFIX.format(number)} {body}",
-            metadata={
-                "issue": number,
-                "reported_as": reported_as,
-                "kind": "known_issue_report" if alias else "known_issue",
-                "approved_by": "maintainer",
-            },
+            metadata=self._metadata(
+                {
+                    "issue": number,
+                    "reported_as": reported_as,
+                    "kind": "known_issue_report" if alias else "known_issue",
+                    "approved_by": "maintainer",
+                }
+            ),
         )
         memory_id = added["results"][0]["id"]
         promoted = self.meko.call(
@@ -219,7 +258,52 @@ class Crew:
         )
         if memory_id not in promoted.get("inserted_ids", []) + promoted.get("updated_ids", []):
             raise RuntimeError(f"uv#{number}: promotion of {memory_id} failed: {promoted}")
+        if self.cloud:
+            self._file_as_document(f"{LEARNING_PREFIX.format(number)} {body}", memory_id, ids)
         return memory_id
+
+    def _file_as_document(self, text: str, memory_id: str, ids: dict[str, str]) -> None:
+        """Meko Cloud puts a promoted memory into the knowledge base without a usable vector (its distance to
+        any query, even its own text, is ~0.99; checked 2026-11-23), so context_search's knowledge-base cutoff
+        drops it and only a keyword match finds it. The same text filed as a knowledge-base document is
+        embedded like the docs. Plain text: Meko Cloud makes no chunk from a Markdown file without a heading,
+        and a .txt file is one chunk with the text as it is. The next ticket starts once it is indexed."""
+        with tempfile.TemporaryDirectory(prefix="dejafix-learning-") as tmp:
+            path = Path(tmp) / f"learning-{memory_id}.txt"
+            path.write_text(text + "\n")
+            key = self.meko.call("knowledgebase_upload_file", **ids, path=str(path))["document_key"]
+            deadline = time.monotonic() + LEARNING_INDEX_TIMEOUT
+            while True:
+                status = self.meko.call("knowledgebase_document_status", **ids, document_key=key)
+                state, chunks = document_state(status)
+                if state == "COMPLETED" and chunks:
+                    return
+                if state in ("COMPLETED", "FAILED") or time.monotonic() > deadline:
+                    raise RuntimeError(f"learning {memory_id}: document {key} {state}, {chunks} chunks")
+                time.sleep(5)
+
+    def verify_searches(self, queries: list[str]) -> list[dict[str, Any]]:
+        """Meko Cloud's own replay of the triage's searches now that the learning is filed: its band before
+        (from the search log) and after (selflearning_verify)."""
+        ids = self._harness_ids()
+        base = {"datapack_id": ids["datapack_id"], "conversation_id": ids["conversation_id"]}
+        rows = self.meko.call("selflearning_query_log", **base, band="all", last="1d")["rows"]
+        checks: list[dict[str, Any]] = []
+        for query in queries:
+            row = next((r for r in rows if r["query"] == query and r["agent_id"] == "triage_agent"), None)
+            if row is None:
+                checks.append({"query": query, "logged": False})
+                continue
+            replay = self.meko.call("selflearning_verify", **base, log_id=row["id"])
+            checks.append({"query": query, "logged": True, "band_before": row["band"], "verify": replay})
+        return checks
+
+    def selflearning_status(self) -> dict[str, Any]:
+        """Meko Cloud's read of the datapack's context quality: strong and weak searches, and its to-dos."""
+        ids = self._harness_ids()
+        return self.meko.call(
+            "selflearning_status", datapack_id=ids["datapack_id"], conversation_id=ids["conversation_id"]
+        )
 
     def save_report(self, records: list[dict[str, Any]], name: str) -> dict[str, Any]:
         conversation_id = self._conversation("dejafix_harness", 0, "Replay reports")
@@ -277,12 +361,14 @@ def main() -> None:
     stream = {t["number"]: t for t in load_stream()}
     pool = load_pool()
     links = load_links()
-    datapack_id = loaded_datapack(args.datapack)["datapack_id"]
+    datapack = loaded_datapack(args.datapack)
+    datapack_id = datapack["datapack_id"]
+    cloud = datapack.get("where") == "cloud"
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     out = RUNS / f"replay-{args.datapack}-{args.memory}-{stamp}.jsonl"
     records = []
     with Meko() as meko:
-        crew = Crew(meko, datapack_id, args.max_runs, links, memory=args.memory == "on")
+        crew = Crew(meko, datapack_id, args.max_runs, links, memory=args.memory == "on", cloud=cloud)
         failures = 0
         for number, steps in plan:
             try:
@@ -308,6 +394,13 @@ def main() -> None:
                 print(f"STOPPED: {spent} tokens after uv#{number}, over the batch limit {args.max_tokens}")
                 break
         artifact = crew.save_report(records, out.with_suffix(".json").name)
+        if cloud:
+            status = crew.selflearning_status()
+            out.with_suffix(".selflearning.json").write_text(json.dumps(status, indent=1))
+            print(f"self-learning: quality {status.get('quality')}, open fixes {status.get('open_fixes')}")
+        print(
+            f"Meko calls by the harness: {meko.calls}, rate-limited {meko.rate_limited}, retried {meko.retried}"
+        )
     print(summary(records))
     print(f"{len(records)} tickets -> {out}; artifact {artifact['content_hash'][:12]}")
 

@@ -77,7 +77,7 @@ def learned_from(warm: dict[int, dict[str, Any]]) -> dict[int, int]:
     return sources
 
 
-def build(paths: dict[str, Path]) -> dict[str, Any]:
+def build(paths: dict[str, Path], meko: str, note: str) -> dict[str, Any]:
     records = {system: load_records(paths[system]) for system in SYSTEMS}
     judged = load_records(paths["judge"]) if paths.get("judge") else {}
     pool = load_pool()
@@ -104,7 +104,8 @@ def build(paths: dict[str, Path]) -> dict[str, Any]:
         "repo": "astral-sh/uv",
         "docs_ref": DOCS_REF,
         "model": "Claude Haiku 5.5 (headless Claude Code)",
-        "meko": "Meko 1.20261116.0, local",
+        "meko": meko,
+        "note": note,
         "systems": list(SYSTEMS),
         "tickets": tickets,
     }
@@ -115,8 +116,14 @@ def main() -> None:
     for name in (*SYSTEMS, "judge"):
         parser.add_argument(f"--{name}", type=Path, required=name != "judge")
     parser.add_argument("--out", type=Path, default=Path("docs/index.html"))
+    parser.add_argument(
+        "--meko", default="Meko 1.20261116.0, local", help="where the runs' Meko ran, as shown"
+    )
+    parser.add_argument(
+        "--note", default="", help="a sentence under the chart, e.g. where each run's Meko ran"
+    )
     args = parser.parse_args()
-    data = build({name: getattr(args, name) for name in (*SYSTEMS, "judge")})
+    data = build({name: getattr(args, name) for name in (*SYSTEMS, "judge")}, args.meko, args.note)
     # Inside <script>: "</" would end the element early; issue titles and replies are untrusted text.
     embedded = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     args.out.parent.mkdir(parents=True, exist_ok=True)

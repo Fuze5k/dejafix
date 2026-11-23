@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from dejafix.github import rest
-from dejafix.meko import Meko, MekoError
+from dejafix.meko import Meko, MekoError, on_cloud
 
 CACHE = Path(__file__).resolve().parent.parent / "data" / "cache"
 STATE = Path(__file__).resolve().parent.parent / "data" / "datapacks.json"
@@ -26,6 +26,15 @@ def loaded_datapack(name: str) -> dict[str, str]:
     if name not in state:
         raise KeyError(f"datapack {name!r} has no docs loaded: run dejafix.load_docs --datapack {name}")
     return state[name]
+
+
+def document_state(status: dict) -> tuple[str, int | None]:
+    """A knowledgebase_document_status reply as (state, chunks). Meko Cloud first answers `awaiting_upload`
+    while the local Meko sends the bytes, then COMPLETED or FAILED with the chunk count; the local Meko has
+    only `document.status`."""
+    document = status.get("document") or {}
+    state = status.get("document_status") or document.get("status") or status.get("state") or "unknown"
+    return state, status.get("chunks_processed", document.get("chunks_processed"))
 
 
 def fetch_docs(repo: str, ref: str, folder: str) -> tuple[str, list[Path]]:
@@ -91,19 +100,20 @@ def main() -> None:
         while pending and time.monotonic() < deadline:
             for name, key in list(pending.items()):
                 status = meko.call("knowledgebase_document_status", document_key=key, **ids)
-                state = status["document"]["status"]
+                state, _ = document_state(status)
                 if state == "COMPLETED":
                     del pending[name]
                 elif state == "FAILED":
                     failed[name] = status.get("message") or "failed"
                     del pending[name]
             if pending:
-                time.sleep(3)
+                time.sleep(15)
         info = meko.call("datapack_describe", datapack_id=datapack_id, conversation_id=ids["conversation_id"])
+        where = "cloud" if on_cloud(meko, datapack_id, ids["conversation_id"]) else "local"
     if pending or failed:
         raise MekoError(f"not indexed: {len(pending)} pending, failed: {failed}")
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
-    state[args.datapack] = {"datapack_id": datapack_id, "docs": f"{args.repo}@{sha}"}
+    state[args.datapack] = {"datapack_id": datapack_id, "docs": f"{args.repo}@{sha}", "where": where}
     STATE.write_text(json.dumps(state, indent=1))
     print(
         f"datapack {args.datapack}: {info.get('knowledge_chunk_count')} chunks from {len(files)} files -> {STATE}"

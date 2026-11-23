@@ -345,7 +345,8 @@ chart();
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(chart, 150); });
 document.getElementById("chart-caption").textContent =
-  `Average over the ${common.length} tickets all three systems ran, by kind. All runs used the same model and docs.`;
+  `Average over the ${common.length} tickets all three systems ran, by kind. All runs used the same model and docs.` +
+  (DATA.note ? ` ${DATA.note}` : "");
 
 // Comparison table
 (function compare() {

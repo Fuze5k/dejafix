@@ -1,0 +1,152 @@
+{
+ "tokens_per_ticket": {
+  "sql": "select o.system, count(distinct o.ticket) as tickets, round(avg(t.tokens)) as tokens_per_ticket, round(sum(t.cost), 2) as cost_usd from outcomes o join (select system, ticket, sum(tokens) as tokens, sum(cost_usd) as cost from agent_runs group by system, ticket) t using (system, ticket) where o.ticket in (select ticket from outcomes group by ticket having count(*) = (select count(distinct system) from outcomes)) group by o.system order by o.system",
+  "rows": [
+   {
+    "system": "cold",
+    "tickets": 35,
+    "tokens_per_ticket": "47223",
+    "cost_usd": "0.30"
+   },
+   {
+    "system": "stuffed",
+    "tickets": 35,
+    "tokens_per_ticket": "251501",
+    "cost_usd": "1.03"
+   },
+   {
+    "system": "warm",
+    "tickets": 35,
+    "tokens_per_ticket": "51118",
+    "cost_usd": "0.29"
+   },
+   {
+    "system": "warm_local",
+    "tickets": 35,
+    "tokens_per_ticket": "39189",
+    "cost_usd": "0.26"
+   }
+  ]
+ },
+ "repeats_found": {
+  "sql": "select o.system, count(*) filter (where o.correct) as right, count(*) as repeats from outcomes o join tickets k on k.number = o.ticket where k.stream_role = 'repeat' and o.ticket in (select ticket from outcomes group by ticket having count(*) = (select count(distinct system) from outcomes)) group by o.system order by o.system",
+  "rows": [
+   {
+    "system": "cold",
+    "right": 0,
+    "repeats": 20
+   },
+   {
+    "system": "stuffed",
+    "right": 20,
+    "repeats": 20
+   },
+   {
+    "system": "warm",
+    "right": 18,
+    "repeats": 20
+   },
+   {
+    "system": "warm_local",
+    "right": 19,
+    "repeats": 20
+   }
+  ]
+ },
+ "fix_reused": {
+  "sql": "select l.filed_under as learned_on, array_agg(distinct o.ticket order by o.ticket) as reused_by from learnings l join outcomes o on o.system = l.system and o.known_issue = l.filed_under and o.ticket <> l.ticket where l.system = 'warm' and o.correct group by l.filed_under order by count(distinct o.ticket) desc, l.filed_under",
+  "rows": [
+   {
+    "learned_on": 1495,
+    "reused_by": [
+     11476,
+     12146,
+     15960
+    ]
+   },
+   {
+    "learned_on": 1910,
+    "reused_by": [
+     11835,
+     14635,
+     16842
+    ]
+   },
+   {
+    "learned_on": 6794,
+    "reused_by": [
+     11027,
+     11300,
+     11679
+    ]
+   },
+   {
+    "learned_on": 2500,
+    "reused_by": [
+     16122,
+     16541
+    ]
+   },
+   {
+    "learned_on": 10008,
+    "reused_by": [
+     13371,
+     15394
+    ]
+   },
+   {
+    "learned_on": 3095,
+    "reused_by": [
+     14123
+    ]
+   },
+   {
+    "learned_on": 5107,
+    "reused_by": [
+     10951
+    ]
+   },
+   {
+    "learned_on": 7552,
+    "reused_by": [
+     15455
+    ]
+   },
+   {
+    "learned_on": 11273,
+    "reused_by": [
+     11458
+    ]
+   },
+   {
+    "learned_on": 14574,
+    "reused_by": [
+     16413
+    ]
+   }
+  ]
+ },
+ "replies_matching": {
+  "sql": "select system, count(*) filter (where resolution = 'match') as matching, count(*) filter (where wrong_claim) as wrong_claims, count(*) as graded from grades group by system order by system",
+  "rows": [
+   {
+    "system": "cold",
+    "matching": 3,
+    "wrong_claims": 7,
+    "graded": 35
+   },
+   {
+    "system": "stuffed",
+    "matching": 19,
+    "wrong_claims": 8,
+    "graded": 35
+   },
+   {
+    "system": "warm",
+    "matching": 21,
+    "wrong_claims": 3,
+    "graded": 35
+   }
+  ]
+ }
+}

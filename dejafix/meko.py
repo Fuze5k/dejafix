@@ -9,12 +9,22 @@ from __future__ import annotations
 import functools
 import itertools
 import json
+import re
 import subprocess
+import sys
+import time
 from typing import Any, Self
 
 import httpx
 
 DEFAULT_URL = "http://127.0.0.1:7777/mcp"
+# Meko Cloud limits calls per key and says how long to wait; the local Meko has no limit.
+RATE_LIMITED = re.compile(r'"PAT_RATE_LIMITED".*?retry after (\d+)s')
+RATE_LIMIT_RETRIES = 5
+# Meko Cloud marks a passing failure (e.g. "Connection reset by peer" while it looks up a conversation, seen
+# 2026-11-23) as retryable: the call is tried again after a short wait, as often as a rate limit.
+RETRYABLE = re.compile(r'"retryable":\s*true')
+RETRYABLE_WAIT = 10
 
 
 class MekoError(RuntimeError):
@@ -22,20 +32,46 @@ class MekoError(RuntimeError):
 
 
 @functools.cache
-def client_token() -> str:
+def _token_info() -> dict[str, Any]:
     done = subprocess.run(["meko", "token", "--json"], check=False, capture_output=True, text=True)
     if done.returncode != 0:
         raise MekoError(f"meko token failed (exit {done.returncode}): is Meko installed?")
-    token = json.loads(done.stdout).get("token", "")
+    return json.loads(done.stdout)
+
+
+def client_token() -> str:
+    token = _token_info().get("token", "")
     if not token:
         raise MekoError("meko token gave no token: start Meko once (scripts/meko-start.sh)")
     return token
+
+
+def cloud_linked() -> bool:
+    """Whether this Meko is linked to Meko Cloud: then new datapacks are made there (`meko cloud-link`)."""
+    return bool(_token_info().get("cloud", {}).get("linked"))
+
+
+def on_cloud(meko: Meko, datapack_id: str, conversation_id: str) -> bool:
+    """Whether a datapack lives in Meko Cloud. While linked, a tool only Meko Cloud has goes there whatever the
+    id, and Meko Cloud refuses an id it does not hold; nothing else tells the two sides apart (Meko's cloud.md)."""
+    if not cloud_linked():
+        return False
+    try:
+        meko.call("selflearning_status", datapack_id=datapack_id, conversation_id=conversation_id)
+    except MekoError as exc:
+        if "datapack_access_denied" in str(exc):
+            return False
+        raise
+    return True
 
 
 class Meko:
     def __init__(self, url: str = DEFAULT_URL, timeout: float = 120.0) -> None:
         self.url = url
         self._ids = itertools.count(1)
+        self.calls = 0
+        self.rate_limited = 0
+        self.retried = 0
         self._http = httpx.Client(
             timeout=timeout,
             headers={
@@ -59,7 +95,33 @@ class Meko:
         return self._rpc("tools/list", {})["tools"]
 
     def call(self, tool: str, **arguments: Any) -> Any:
-        """Call a tool and return its parsed JSON reply; an in-band error code raises MekoError."""
+        """Call a tool and return its parsed JSON reply; an in-band error code raises MekoError.
+
+        A Meko Cloud rate limit is waited out as the reply says, and a failure it marks retryable is tried
+        again after a short wait, a few times each, then raised."""
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            try:
+                return self._call(tool, arguments)
+            except MekoError as exc:
+                limited = RATE_LIMITED.search(str(exc))
+                if attempt == RATE_LIMIT_RETRIES or (limited is None and not RETRYABLE.search(str(exc))):
+                    raise
+                if limited:
+                    self.rate_limited += 1
+                    wait = int(limited.group(1)) + 1
+                else:
+                    self.retried += 1
+                    wait = RETRYABLE_WAIT
+                print(
+                    f"meko: {tool} failed ({str(exc)[:120]}), retrying in {wait} s",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(wait)
+        raise AssertionError("unreachable")
+
+    def _call(self, tool: str, arguments: dict[str, Any]) -> Any:
+        self.calls += 1
         result = self._rpc("tools/call", {"name": tool, "arguments": arguments})
         text = "".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
         try:

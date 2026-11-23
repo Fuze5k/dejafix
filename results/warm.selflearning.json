@@ -1,0 +1,201 @@
+{
+ "datapack_id": "e3653b44-7190-498c-b4c0-b9b7863d89a3",
+ "window": {
+  "from": "2026-11-10T00:00:00Z",
+  "to": "2026-11-24T00:00:00Z"
+ },
+ "quality": {
+  "pct": 10,
+  "potential_pct": 99,
+  "searches": 97,
+  "high": 10
+ },
+ "todos": [
+  {
+   "id": "add_content",
+   "group": "setup",
+   "state": "done",
+   "title": "Add your first document or memory",
+   "why": "Searches need something to find. Upload a document or add a memory so your agents have context to search.",
+   "searches": 0,
+   "points": 0,
+   "shortfall": [],
+   "examples": []
+  },
+  {
+   "id": "first_searches",
+   "group": "setup",
+   "state": "done",
+   "title": "Run your first searches from an agent",
+   "why": "The list can only tell you what to fix once agents have searched. Connect an agent and run a few searches.",
+   "searches": 0,
+   "points": 0,
+   "shortfall": [],
+   "examples": []
+  },
+  {
+   "id": "add_context",
+   "group": "improve",
+   "state": "todo",
+   "title": "Add context for 73 searches that found little or nothing",
+   "why": "These searches found little or nothing, usually because the datapack does not cover the topic yet. Add a memory or a document that answers them, then re-run them to check.",
+   "searches": 73,
+   "points": 75,
+   "shortfall": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "coverage"
+    }
+   ],
+   "examples": [
+    {
+     "log_id": "2e813925-4269-4b65-b644-9e2763c625db",
+     "label": "file collision RECORD missing files uv sync reinstall",
+     "detail": "source not searched",
+     "count": 2
+    },
+    {
+     "log_id": "603a23ba-018d-4d5e-9a1c-344060383b5d",
+     "label": "File collisions between two distributions are resolved silently, survive uninsta",
+     "detail": "partial match",
+     "count": 2
+    },
+    {
+     "log_id": "fc8359ff-debb-403c-8f1f-77aa0264d759",
+     "label": "uv does not use system site packages like tree-sitter-*",
+     "detail": "partial match",
+     "count": 2
+    }
+   ]
+  },
+  {
+   "id": "clarify_prompts",
+   "group": "improve",
+   "state": "todo",
+   "title": "Make 14 vague prompts more specific",
+   "why": "Short prompts and follow-ups give the search too little to match on. Asking with the subject and the detail wanted helps it find the right context.",
+   "searches": 14,
+   "points": 14,
+   "shortfall": [
+    {
+     "field": "reason",
+     "op": "eq",
+     "value": "vague_prompt"
+    }
+   ],
+   "examples": [
+    {
+     "log_id": "9021d343-0b1b-46f4-97a4-344e3560e26f",
+     "label": "export extra-index-url requirements",
+     "detail": "too short",
+     "count": 3
+    },
+    {
+     "log_id": "9b4ae0e6-7155-4e36-832e-81dd29fc0ec9",
+     "label": "UV_PROJECT_ENVIRONMENT script",
+     "detail": "too short",
+     "count": 1
+    },
+    {
+     "log_id": "5e22a8ca-1e15-482a-a536-16b943123804",
+     "label": "uv export index-url",
+     "detail": "too short",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "id": "rerun_test_prompts",
+   "group": "maintain",
+   "state": "todo",
+   "title": "Re-run 2 saved test prompts",
+   "why": "You added context since these saved searches last ran. Re-run them to see whether the results improved.",
+   "searches": 0,
+   "points": 0,
+   "shortfall": [],
+   "examples": []
+  }
+ ],
+ "open_fixes": [
+  "add_context",
+  "clarify_prompts"
+ ],
+ "breakdown": {
+  "totals": {
+   "avg_score": 0.6741,
+   "avg_elapsed_ms": 1287.1,
+   "searches": 97,
+   "zero_results": 20
+  },
+  "by_band": {
+   "high": 10,
+   "mid": 67,
+   "low": 20
+  },
+  "by_category": [
+   {
+    "category": "coverage",
+    "count": 73
+   },
+   {
+    "category": "vague",
+    "count": 14
+   }
+  ],
+  "by_reason": [
+   {
+    "reason": "partial_match",
+    "category": "coverage",
+    "sub_types": [
+     {
+      "sub_type": "memory",
+      "count": 37
+     },
+     {
+      "sub_type": "knowledge_base",
+      "count": 21
+     }
+    ],
+    "count": 58
+   },
+   {
+    "reason": "source_not_searched",
+    "category": "coverage",
+    "sub_types": [
+     {
+      "sub_type": "restricted",
+      "count": 15
+     }
+    ],
+    "count": 15
+   },
+   {
+    "reason": "vague_prompt",
+    "category": "vague",
+    "sub_types": [
+     {
+      "sub_type": "too_short",
+      "count": 14
+     }
+    ],
+    "count": 14
+   }
+  ]
+ },
+ "history": [
+  {
+   "id": "first_searches",
+   "kind": "completed",
+   "title": "Run your first searches from an agent",
+   "completed_at": "2026-11-23T18:39:34.148867Z"
+  },
+  {
+   "id": "add_content",
+   "kind": "completed",
+   "title": "Add your first document or memory",
+   "completed_at": "2026-11-23T18:39:34.124118Z"
+  }
+ ],
+ "hint": "Read the searches behind a to-do with selflearning_shortfalls(todo_id=...), fix with memory_add or knowledgebase_upload_document, then check it with selflearning_verify."
+}

@@ -4,27 +4,35 @@ Support agents that never solve the same issue twice. A triage crew for open-sou
 [Meko](https://mekodata.ai) datapack: every issue a maintainer resolves becomes a fix the next agent finds, so a
 repeat question gets the maintainer's own answer in seconds instead of another round of their time.
 
-Built for ContextCon: Remember Everything (YugabyteDB x HackerEarth), theme 2 "Never Solve It Twice". Work in
-progress.
+Built for ContextCon: Remember Everything (YugabyteDB x HackerEarth), theme 2 "Never Solve It Twice".
 
 ## Results
 
-The same 36 uv tickets (20 repeats, 12 first reports, 4 unrelated), Claude Haiku 5.5 for every agent, a local Meko:
+The same 35 uv tickets (20 repeats, 11 first reports, 4 unrelated), Claude Haiku 5.5 for every agent:
 
-| | Right (repeats named exactly) | Tokens per ticket | Cost, 36 tickets | Time per ticket | Replies matching the maintainers |
+| | Right (repeats named exactly) | Tokens per ticket | Cost, 35 tickets | Time per ticket | Replies matching the maintainers |
 |---|---|---|---|---|---|
-| Cold crew (no shared memory) | 16/36 (0/20) | 47.1k | $0.30 | 26 s | 4/36 (repeats 0/20) |
-| **Warm crew (Meko memory)** | **35/36 (19/20)** | **39.4k** | **$0.27** | 25 s | **23/36 (repeats 20/20)** |
-| Stuffed prompt (all docs and history, one call) | 36/36 (19/20) | 250.4k | $1.05 | 9 s | 22/36 (repeats 17/20) |
+| Cold crew (no shared memory), local Meko | 15/35 (0/20) | 47.2k | $0.30 | 26 s | 3/35 (repeats 0/20) |
+| **Warm crew (Meko memory), local Meko** | **34/35 (19/20)** | **39.2k** | **$0.26** | 24 s | **23/35 (repeats 20/20)** |
+| Warm crew, final run on Meko Cloud | 33/35 (18/20) | 51.1k | $0.29 | 29 s | 21/35 (repeats 19/20) |
+| Stuffed prompt (all docs and history, one call) | 35/35 (19/20) | 251.5k | $1.03 | 8 s | 19/35 (repeats 18/20) |
 
-- On repeats the warm crew spends 35% fewer tokens than the cold one (47.2k to 30.6k) with half the Meko calls,
-  and its reply matched what the maintainers said on all 20.
+- Like for like on the local Meko, the warm crew spends 35% fewer tokens than the cold one on repeats (47.2k to
+  30.6k) with half the Meko calls, and its reply matched what the maintainers said on all 20.
+- The final run on Meko Cloud has every later fix and Cloud's traces (below). Its replies matched the maintainers
+  on 21 tickets against the cold crew's 3. Its tokens are not like for like with the cold run: Cloud's searches
+  return different chunks (0.6 to 2.3 times the local text in a spot check). It missed two repeats: uv#10281,
+  because a passing Cloud error ("connection reset") lost the learning of uv#4422 (the client now retries what
+  Cloud marks retryable), and uv#12581, whose triage searches did not reach the learning. The maintainers'
+  duplicate links then filed both as new reports of their issues (the correction loop below).
 - Stuffing everything into one prompt is as accurate on a history this small, and faster, but it costs 6.4 times
-  the tokens and grows by about 330 tokens with every earlier ticket: on uv's real backlog it passes a 1M-token
-  context window at about 2,400 earlier tickets. The crew's prompt stays flat.
+  the tokens of the local warm crew and grows by about 330 tokens with every earlier ticket: on uv's real backlog it
+  passes a 1M-token context window at about 2,400 earlier tickets. The crew's prompt stays flat.
 - "Right": a repeat named an issue of the right duplicate cluster, a first report or an unrelated issue was not
   called a known one. The replies were graded blind (shuffled per ticket) by the same model against the
-  maintainers' replies. Costs are API prices, prompt caching included.
+  maintainers' replies; the local warm run was graded in an earlier pass, which gave the cold crew 4 and the
+  stuffed prompt 22 (3 and 19 in the final pass). Costs are API prices, prompt caching included. uv#4422 is left
+  out of every system: the Cloud run has no record of it.
 
 The dashboard shows every ticket with each agent's Meko calls, reasoning, plan and reply, and which learning a
 repeat reused: <https://fuze5k.github.io/dejafix/> (the same page is `docs/index.html`).
@@ -48,9 +56,11 @@ one). The current stream: 41 tickets, 12 first, 21 repeat, 8 new, from 2024-02 t
 What this repository holds, and what it leaves on GitHub:
 
 - `data/stream.json`: issue numbers, labels and dates.
-- `results/`: one JSON line per ticket for each system (`cold.jsonl`, `warm.jsonl`, `baseline.jsonl`), with the
-  agents' answers (verdict, evidence, reasoning, plan, reply), their Meko calls and token counts; `judge.jsonl`
-  with the blind grades; `shortfall-check-20907.json`, the before/after of the learning loop below. The agents'
+- `results/`: one JSON line per ticket for each system (`cold.jsonl`; `warm.jsonl`, the final run on Meko Cloud;
+  `warm-local.jsonl`, the warm run on the local Meko; `baseline.jsonl`), with the agents' answers (verdict,
+  evidence, reasoning, plan, reply), their Meko calls and token counts; `judge.jsonl` and `judge-local.jsonl` with
+  the blind grades; `warm.selflearning.json`, Meko Cloud's read of the final datapack; `amp-queries.json`, the
+  Postgres queries below and their answers; `shortfall-check-20907.json`, the before/after of the learning loop. The agents'
   text may quote a line of an issue or of the uv docs (the longest verbatim issue quote is 225 characters).
 - Not here: issue bodies, comments and maintainer replies (`fetch_issues` reads them into `data/cache/` with your
   own `gh` login), the uv docs (`load_docs` fetches them at one pinned commit), and the raw agent logs (`runs/`),
@@ -77,9 +87,10 @@ Grading and the dashboard:
 
 ```sh
 uv run python -m dejafix.judge --cold results/cold.jsonl --warm results/warm.jsonl \
-    --baseline results/baseline.jsonl --max-tokens 400000   # one blind call per ticket grades the three replies
+    --baseline results/baseline.jsonl --max-tokens 285000   # one blind call per ticket grades the three replies
 uv run python -m dejafix.dashboard --cold results/cold.jsonl --warm results/warm.jsonl \
     --baseline results/baseline.jsonl --judge results/judge.jsonl  # writes docs/index.html, data inside
+# --meko and --note say on the page where each run's Meko ran (the published page: cold local, warm on Meko Cloud)
 ```
 
 Each ticket goes through three agents, each its own `agent_id` on one datapack:
@@ -103,6 +114,37 @@ logs to `runs/` (not committed); `results/` holds the records of the runs above.
 
 The docs are today's (one pinned commit), not the docs as they were when each issue was opened: both cold and warm
 runs get the same docs, so the comparison stays fair, but a docs answer can be newer than the issue.
+
+## On Meko Cloud
+
+The final warm run ran on Meko Cloud (Free plan) through the local Meko linked to it (Settings › Meko Cloud in
+Meko's web UI): the same crew and tools, plus what only Meko Cloud has.
+
+- **Traces with their cost.** Each agent turn's tokens go onto its conversation's trace (`track_token_usage`),
+  next to that turn's reasoning and plan, so Meko's Observe view shows every ticket's decision trace with its
+  spend.
+- **Self-learning.** When the crew misses a repeat and the maintainer's duplicate link files the learning (above),
+  Meko Cloud replays the triage's logged searches against it (`selflearning_verify`); after the run
+  `selflearning_status` gives the datapack's search quality and open to-dos.
+- **Postgres inside the datapack.** `dejafix.amp` builds a Postgres cluster in the datapack (AMP) and loads the
+  tickets, GitHub's duplicate links, every system's outcomes and agent runs, the learnings and the judge's grades,
+  then runs the queries behind the numbers above (`results/amp-queries.json`), all four runs side by side.
+- **A Cloud gap and its workaround.** On Meko Cloud a promoted memory reaches the knowledge base without a usable
+  vector (its distance to any query, even its own text, is about 0.99), so `context_search` never returns it. The
+  pipeline also files every approved learning as a plain-text knowledge-base document, which is embedded like the
+  docs. Replaying the recorded triage searches, Cloud then found the expected learning for 14 of 15 repeats, the
+  same as the local Meko (0 of 21 before).
+
+```sh
+uv run python -m dejafix.load_docs --datapack dejafix-uv-final   # while linked, a new datapack is made in Meko Cloud
+uv run python -m dejafix.replay --datapack dejafix-uv-final --memory on --tickets 6794:full,11027:full --max-runs 6
+uv run python -m dejafix.amp --datapack dejafix-uv-final --replay cold=results/cold.jsonl \
+    --replay warm=results/warm.jsonl --replay warm_local=results/warm-local.jsonl \
+    --replay stuffed=results/baseline.jsonl --judge results/judge.jsonl
+```
+
+The writer endpoint of the Postgres cluster accepts only the address it was built from, and its password lives
+in that one process: a later run rebuilds the cluster.
 
 ## Licence
 

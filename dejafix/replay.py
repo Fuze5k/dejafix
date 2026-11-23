@@ -27,6 +27,9 @@ from dejafix.load_docs import loaded_datapack
 from dejafix.meko import Meko
 from dejafix.tickets import load_links, load_pool, load_stream, maintainer_replies, ticket_text
 
+LEARNING_PREFIX = "Known issue uv#{}:"
+KNOWN_PREFIX = re.compile(r"^Known issue uv#\d+:\s*")
+
 MAINTAINER_CHARS = 3000
 
 
@@ -56,7 +59,7 @@ class Crew:
         ids = {"datapack_id": self.datapack_id, "agent_id": "dejafix_harness"}
         ids["conversation_id"] = self._conversation("dejafix_harness", 0, "Replay reports")
         promoted = self.meko.call("memory_get_all", **ids, promoted=True)["promoted_memories"]
-        prefix = f"Known issue uv#{issue}:"
+        prefix = LEARNING_PREFIX.format(issue)
         return next((m["data"] for m in promoted if m["data"].startswith(prefix)), None)
 
     def _conversation(self, agent_id: str, number: int, title: str) -> str:
@@ -150,7 +153,11 @@ class Crew:
         return record
 
     def _save_learning(self, number: int, learning: str, ids: dict[str, str]) -> str:
-        """The maintainer's reply is the approval: save it as a learning, promote it into collective memory."""
+        """The maintainer's reply is the approval: save it as a learning, promote it into collective memory.
+
+        The learning is filed under its own issue (GitHub's duplicate links point at it); the pipeline sets
+        the number, not the model. A tracking issue the maintainer named stays in the text."""
+        learning = f"{LEARNING_PREFIX.format(number)} {KNOWN_PREFIX.sub('', learning.strip(), count=1)}"
         added = self.meko.call(
             "memory_add",
             **ids,

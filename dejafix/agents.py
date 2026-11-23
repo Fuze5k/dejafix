@@ -92,8 +92,9 @@ names the issue's main problem in general terms first (the root cause or the mis
 maintainer's reply resolves), then the ways users report that problem (symptoms, error text, narrower
 requests, what they tried), then the resolution, status or workaround in the maintainer's terms; under
 120 words. Leave out other requests the report makes in passing (other commands or features it also
-asks for): they are other issues, and naming them makes the crew match those issues to this one. If the maintainer says it is tracked in
-another issue, start "Known issue uv#<that issue>:" instead. No maintainer reply: learning null.
+asks for): they are other issues, and naming them makes the crew match those issues to this one. N is
+this issue's own number; if the maintainer says it is tracked in another issue, say so in the resolution
+("tracked in uv#M"). No maintainer reply: learning null.
 JSON: {"approved": true|false, "problems": [<short>], "learning": "<text or null>",
 "reasoning": "<two sentences>", "plan": "<one sentence>"}""",
     },

@@ -134,7 +134,8 @@ Meko's web UI): the same crew and tools, plus what only Meko Cloud has.
   vector (its distance to any query, even its own text, is about 0.99), so `context_search` never returns it. The
   pipeline also files every approved learning as a plain-text knowledge-base document, which is embedded like the
   docs. Replaying the recorded triage searches, Cloud then found the expected learning for 14 of 15 repeats, the
-  same as the local Meko (0 of 21 before).
+  same as the local Meko (0 of 21 before). Reported to the Meko team as
+  [yugabyte/meko#548](https://github.com/yugabyte/meko/issues/548).
 
 ```sh
 uv run python -m dejafix.load_docs --datapack dejafix-uv-final   # while linked, a new datapack is made in Meko Cloud

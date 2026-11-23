@@ -152,7 +152,9 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); 
     <h1>DejaFix: support agents that never solve the same issue twice</h1>
     <p class="lede">A triage, solver and reviewer crew sharing one <a href="https://mekodata.ai">Meko</a> datapack,
       replayed in date order on real <a href="https://github.com/astral-sh/uv">astral-sh/uv</a> issues. GitHub gives
-      the ground truth: the issues the uv maintainers closed as duplicates, and what they replied.</p>
+      the ground truth: the issues the uv maintainers closed as duplicates, and what they replied. The crew's
+      approved learnings can be queried in a <a href="https://cloud.mekodata.ai/share/o3dxj4ex9JQNVn-Kp1Dj7w">shared Meko datapack</a> (a free Meko Cloud account
+      opens it).</p>
     <p class="meta" id="meta"></p>
   </header>
 
@@ -458,6 +460,9 @@ document.getElementById("chart-caption").textContent =
   ].forEach((text) => list.append(el("li", {}, text)));
   list.append(el("li", {}, "Code, records and how to run it again: ",
     el("a", { href: "https://github.com/Fuze5k/dejafix" }, "github.com/Fuze5k/dejafix"), "."));
+  list.append(el("li", {}, "The learnings to query from your own Claude or Meko: ",
+    el("a", { href: "https://cloud.mekodata.ai/share/o3dxj4ex9JQNVn-Kp1Dj7w" }, "the shared datapack dejafix-uv-learnings"),
+    " (a free Meko Cloud account opens it)."));
 })();
 </script>
 </body>

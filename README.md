@@ -35,7 +35,8 @@ The same 35 uv tickets (20 repeats, 11 first reports, 4 unrelated), Claude Haiku
   out of every system: the Cloud run has no record of it.
 
 The dashboard shows every ticket with each agent's Meko calls, reasoning, plan and reply, and which learning a
-repeat reused: <https://fuze5k.github.io/dejafix/> (the same page is `docs/index.html`).
+repeat reused: <https://fuze5k.github.io/dejafix/> (the same page is `docs/index.html`). The 22 learnings the final
+run saved can be queried in Meko Cloud: <https://cloud.mekodata.ai/share/o3dxj4ex9JQNVn-Kp1Dj7w> (a free Meko Cloud account opens it).
 
 ## The data
 
@@ -146,7 +147,8 @@ uv run python -m dejafix.amp --datapack dejafix-uv-final --replay cold=results/c
 **A pack to query.** `dejafix.learnings_pack` copies the final run's 22 approved learnings into a datapack of
 their own, `dejafix-uv-learnings`: one plain-text document per learning, with a link to its issue, and one saying
 what the pack is. The crew's conversations, which quote the issues, stay out; the pack holds no conversations and
-no memories.
+no memories. It is shared read-only at <https://cloud.mekodata.ai/share/o3dxj4ex9JQNVn-Kp1Dj7w>: sign in to a free Meko Cloud account to open it, then query it
+from Meko's web UI or any MCP client.
 
 ```sh
 uv run python -m dejafix.learnings_pack --datapack dejafix-uv-learnings --replay results/warm.jsonl

@@ -54,13 +54,35 @@ class Crew:
         """The canonical issue a maintainer closed this one as a duplicate of (itself when none)."""
         return None if number is None else self.links.get(number, number)
 
-    def learning_of(self, issue: int) -> str | None:
-        """The approved learning saved for `issue`, from the datapack's collective memory."""
+    def _harness_ids(self) -> dict[str, str]:
         ids = {"datapack_id": self.datapack_id, "agent_id": "dejafix_harness"}
         ids["conversation_id"] = self._conversation("dejafix_harness", 0, "Replay reports")
-        promoted = self.meko.call("memory_get_all", **ids, promoted=True)["promoted_memories"]
+        return ids
+
+    def learning_of(self, issue: int) -> str | None:
+        """The approved learnings saved for `issue` (the first one, then other reports of it), from the
+        datapack's collective memory."""
+        promoted = self.meko.call("memory_get_all", **self._harness_ids(), promoted=True)["promoted_memories"]
         prefix = LEARNING_PREFIX.format(issue)
-        return next((m["data"] for m in promoted if m["data"].startswith(prefix)), None)
+        texts = [m["data"] for m in sorted(promoted, key=lambda m: m.get("created_at") or "")]
+        found = [t for t in texts if t.startswith(prefix)]
+        return "\n\n".join(found) or None
+
+    def learning_ranks(self, issue: int, queries: list[str]) -> list[int | None]:
+        """Where a learning of `issue` ranks in the knowledge-base results of each query (None: absent)."""
+        prefix = LEARNING_PREFIX.format(issue)
+        ranks: list[int | None] = []
+        for query in queries:
+            found = (
+                self.meko.call(
+                    "context_search", **self._harness_ids(), query=query, force_source="knowledge_base"
+                )["results"]["knowledge_base"]
+                or []
+            )
+            ranks.append(
+                next((i for i, hit in enumerate(found, 1) if hit["chunk_text"].startswith(prefix)), None)
+            )
+        return ranks
 
     def _conversation(self, agent_id: str, number: int, title: str) -> str:
         return self.meko.call(
@@ -146,23 +168,50 @@ class Crew:
             record["approved"] = reviewer.answer.get("approved")
             new_learning = reviewer.answer.get("learning")
             if self.memory and not known and new_learning:
+                # The maintainer's duplicate link comes after the crew answered: it is the human correction.
+                # A miss of a known issue (a shortfall) is filed under that issue, so the next report
+                # worded like this one finds it; the triage's own queries, run again, show the gain.
+                canonical = self.links.get(number)
+                shortfall = canonical is not None and self.learning_of(canonical) is not None
+                queries = [c["query"] for c in triage.calls if c["tool"] == "context_search"]
+                before = self.learning_ranks(canonical, queries) if shortfall else None
+                filed_under = canonical if canonical is not None else number
                 record["learning"] = new_learning
-                record["learning_id"] = self._save_learning(number, new_learning, reviewer_ids)
+                record["learning_filed_under"] = filed_under
+                record["learning_id"] = self._save_learning(
+                    filed_under, new_learning, reviewer_ids, reported_as=number
+                )
+                if shortfall:
+                    record["shortfall"] = {
+                        "canonical": canonical,
+                        "queries": queries,
+                        "rank_before": before,
+                        "rank_after": self.learning_ranks(canonical, queries),
+                    }
             record["maintainer_needed"] = not known
         record["runs"] = [asdict(r) | {"tokens": r.tokens} for r in runs]
         return record
 
-    def _save_learning(self, number: int, learning: str, ids: dict[str, str]) -> str:
+    def _save_learning(self, number: int, learning: str, ids: dict[str, str], reported_as: int) -> str:
         """The maintainer's reply is the approval: save it as a learning, promote it into collective memory.
 
-        The learning is filed under its own issue (GitHub's duplicate links point at it); the pipeline sets
-        the number, not the model. A tracking issue the maintainer named stays in the text."""
-        learning = f"{LEARNING_PREFIX.format(number)} {KNOWN_PREFIX.sub('', learning.strip(), count=1)}"
+        The learning is filed under the issue GitHub's duplicate links point at: its own, or the one the
+        maintainer closed it against (then it is another report of that issue). The pipeline sets the
+        number, not the model; a tracking issue the maintainer only named stays in the text."""
+        body = KNOWN_PREFIX.sub("", learning.strip(), count=1)
+        alias = reported_as != number
+        if alias:
+            body = f"(also reported as uv#{reported_as}) {body}"
         added = self.meko.call(
             "memory_add",
             **ids,
-            text=learning,
-            metadata={"issue": number, "kind": "known_issue", "approved_by": "maintainer"},
+            text=f"{LEARNING_PREFIX.format(number)} {body}",
+            metadata={
+                "issue": number,
+                "reported_as": reported_as,
+                "kind": "known_issue_report" if alias else "known_issue",
+                "approved_by": "maintainer",
+            },
         )
         memory_id = added["results"][0]["id"]
         promoted = self.meko.call(

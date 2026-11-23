@@ -39,6 +39,15 @@ uv run python -m dejafix.replay --datapack dejafix-uv-warm --tickets 6794:full,1
 `--max-tokens` stops a batch once it has spent that many. `dejafix.baseline` runs the same tickets without
 Meko, one call each with all the docs and every earlier ticket's maintainer reply in the prompt.
 
+Grading and the dashboard:
+
+```sh
+uv run python -m dejafix.judge --cold runs/<cold>.jsonl --warm runs/<warm>.jsonl --baseline runs/<baseline>.jsonl \
+    --max-tokens 400000                       # one blind call per ticket grades the three replies
+uv run python -m dejafix.dashboard --cold ... --warm ... --baseline ... --judge runs/<judge>.jsonl
+                                              # writes site/index.html, one file with the data inside
+```
+
 Each ticket goes through three agents, each its own `agent_id` on one datapack:
 
 - **triage** searches Meko (`context_search`: knowledge base, learnings, the crew's past conversations) and says
@@ -47,6 +56,11 @@ Each ticket goes through three agents, each its own `agent_id` on one datapack:
 - **reviewer** checks the draft against the evidence. When the issue was not a known one, the uv maintainers' real
   reply on it is the human decision: the reviewer writes the learning from it, and only then the pipeline saves it
   (`memory_add`) and promotes it into the datapack's collective memory (`memory_promote`).
+
+**Learning from the maintainer's correction.** When the crew misses a repeat and the maintainer then closes
+the issue as a duplicate of one the crew already had a learning for (a shortfall), the new learning is filed under
+that issue as another report of it, so the next report worded like this one finds it. The triage's own searches
+are run again before and after, and the record keeps where the learning ranked: the before/after of the loop.
 
 Agents only read Meko; every write (conversations with each turn's reasoning and plan, learnings, the run report
 as an artifact) is the pipeline's. Each agent is a `claude -p` run in an empty folder, with no built-in tools and only

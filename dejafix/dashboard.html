@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DejaFix runs</title>
+<style>
+:root {
+  color-scheme: light;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6e6c66;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.10);
+  --accent: #2a78d6;
+  --good: #006300;
+  --bad: #b42f2f;
+  --series-warm: #2a78d6;
+  --series-cold: #eb6834;
+  --series-baseline: #1baf7a;
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #a3a198;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --good: #0ca30c;
+    --bad: #e66767;
+    --series-warm: #3987e5;
+    --series-cold: #d95926;
+    --series-baseline: #199e70;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #a3a198;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --ring: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --good: #0ca30c;
+  --bad: #e66767;
+  --series-warm: #3987e5;
+  --series-cold: #d95926;
+  --series-baseline: #199e70;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.5 var(--font);
+}
+main { max-width: 1120px; margin: 0 auto; padding: var(--space-8) var(--space-4); }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 var(--space-2); }
+h2 { font-size: 20px; margin: var(--space-8) 0 var(--space-3); }
+p { margin: 0 0 var(--space-3); max-width: 72ch; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.lede { color: var(--ink-2); }
+.meta { color: var(--muted); font-size: 14px; }
+.card {
+  background: var(--surface); border: 1px solid var(--ring); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: var(--space-4);
+}
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); }
+.tile .label { color: var(--ink-2); font-size: 14px; }
+.tile .value { font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; margin: var(--space-1) 0; }
+.tile .sub { color: var(--muted); font-size: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-3); font-size: 14px; color: var(--ink-2); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: var(--space-2); vertical-align: -1px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart text { fill: var(--ink-2); font: 13px var(--font); font-variant-numeric: tabular-nums; }
+.chart .row-label { fill: var(--ink); font-weight: 600; }
+.chart .gridline { stroke: var(--grid); stroke-width: 1; }
+.chart .baseline-axis { stroke: var(--axis); stroke-width: 1; }
+.chart .bar:hover, .chart .bar:focus { opacity: 0.85; }
+.tooltip {
+  position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--ring); border-radius: 6px; box-shadow: var(--shadow); padding: var(--space-2) var(--space-3);
+  font-size: 14px; white-space: nowrap; display: none; z-index: 2;
+}
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; font-size: 14px; position: sticky; top: 0; background: var(--surface); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.sys-name { white-space: nowrap; }
+.ok { color: var(--good); }
+.bad { color: var(--bad); }
+.pill { display: inline-block; font-size: 13px; padding: 0 var(--space-2); border-radius: 999px; border: 1px solid var(--ring); color: var(--ink-2); white-space: nowrap; }
+.reuse li { margin-bottom: var(--space-2); }
+.tickets details { border-bottom: 1px solid var(--grid); }
+.tickets summary {
+  display: grid; grid-template-columns: 96px 72px 1fr 80px repeat(3, 64px) 72px; gap: var(--space-3);
+  align-items: baseline; padding: var(--space-2) var(--space-1); cursor: pointer; list-style: none; min-height: 44px;
+}
+.tickets summary::-webkit-details-marker { display: none; }
+.tickets .head { display: grid; grid-template-columns: 96px 72px 1fr 80px repeat(3, 64px) 72px; gap: var(--space-3);
+  padding: var(--space-2) var(--space-1); color: var(--ink-2); font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--axis); }
+.tickets .title { overflow-wrap: anywhere; }
+.tickets .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tickets .c { text-align: center; }
+.trace { padding: var(--space-2) var(--space-1) var(--space-4); display: grid; gap: var(--space-3); }
+.trace h4 { margin: 0 0 var(--space-1); font-size: 15px; }
+.trace .reply { white-space: pre-wrap; font-size: 14px; color: var(--ink-2); margin: var(--space-2) 0 0; max-width: 80ch; }
+.trace ol { margin: var(--space-1) 0 0; padding-left: var(--space-6); }
+.trace code, .mono { font-family: var(--mono); font-size: 13px; }
+.trace .why { color: var(--ink-2); font-size: 14px; }
+.notes li { margin-bottom: var(--space-2); max-width: 80ch; }
+@media (max-width: 760px) {
+  .tickets summary, .tickets .head { grid-template-columns: 64px 1fr repeat(3, 40px); }
+  .tickets .date, .tickets .kind, .tickets .tok { display: none; }
+  .tile .value { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>DejaFix: support agents that never solve the same issue twice</h1>
+    <p class="lede">A triage, solver and reviewer crew sharing one <a href="https://mekodata.ai">Meko</a> datapack,
+      replayed in date order on real <a href="https://github.com/astral-sh/uv">astral-sh/uv</a> issues. GitHub gives
+      the ground truth: the issues the uv maintainers closed as duplicates, and what they replied.</p>
+    <p class="meta" id="meta"></p>
+  </header>
+
+  <section aria-labelledby="h-results">
+    <h2 id="h-results">Results</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section aria-labelledby="h-tokens">
+    <h2 id="h-tokens">Tokens per ticket</h2>
+    <p class="meta" id="chart-caption"></p>
+    <div class="card chart" id="chart">
+      <div class="legend" id="legend"></div>
+      <div class="tooltip" id="tooltip" role="status"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-compare">
+    <h2 id="h-compare">Cold crew, warm crew and the stuffed prompt</h2>
+    <p class="meta" id="compare-caption"></p>
+    <div class="card scroll"><table id="compare"></table></div>
+  </section>
+
+  <section aria-labelledby="h-reuse">
+    <h2 id="h-reuse">Fixes reused across agents</h2>
+    <p>Each line is a repeat the warm crew recognised: its triage agent found the learning that the reviewer agent
+      saved from an earlier issue's maintainer reply, and the solver answered from it without searching again.</p>
+    <div class="card"><ul class="reuse" id="reuse"></ul></div>
+  </section>
+
+  <section aria-labelledby="h-stream">
+    <h2 id="h-stream">The ticket stream</h2>
+    <p>Open a ticket to see each agent's Meko calls, reasoning and plan, the drafted replies, and the judge's grades.</p>
+    <div class="card tickets scroll" id="tickets"></div>
+  </section>
+
+  <section aria-labelledby="h-notes">
+    <h2 id="h-notes">How this was measured</h2>
+    <ul class="notes" id="notes"></ul>
+  </section>
+</main>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const NAMES = { warm: "Warm crew (Meko memory)", cold: "Cold crew (no memory)", baseline: "Stuffed prompt (no Meko)" };
+const SHORT = { warm: "Warm", cold: "Cold", baseline: "Stuffed" };
+const ORDER = ["warm", "cold", "baseline"];
+const KINDS = [["repeat", "Repeats"], ["first", "First reports"], ["new", "Unrelated"]];
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === undefined || value === null || value === false) continue;
+    if (key === "class") node.className = value; else node.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined || child === false) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+const k = (n) => `${(n / 1000).toFixed(1)}k`;
+const usd = (n, digits = 3) => `$${n.toFixed(digits)}`;
+const avg = (rows, f) => rows.length ? rows.reduce((s, r) => s + f(r), 0) / rows.length : 0;
+const mark = (ok, label) => el("span", { class: ok ? "ok" : "bad" }, ok ? "✓" : "✗", label ? ` ${label}` : "");
+
+const tickets = DATA.tickets;
+const common = tickets.filter((t) => ORDER.every((s) => t.systems[s]));
+const judged = common.filter((t) => t.grades);
+
+function stats(system, rows) {
+  const views = rows.map((t) => t.systems[system]).filter(Boolean);
+  const repeats = rows.filter((t) => t.role === "repeat" && t.systems[system]);
+  const grades = rows.filter((t) => t.grades).map((t) => t.grades[system]);
+  return {
+    n: views.length,
+    right: views.filter((v) => v.correct).length,
+    repeats: repeats.length,
+    exact: repeats.filter((t) => t.systems[system].exact).length,
+    tokens: avg(views, (v) => v.tokens),
+    cost: views.reduce((s, v) => s + v.cost, 0),
+    seconds: avg(views, (v) => v.seconds),
+    calls: avg(views, (v) => v.meko_calls),
+    judged: grades.length,
+    match: grades.filter((g) => g.resolution === "match").length,
+    partial: grades.filter((g) => g.resolution === "partial").length,
+    wrong: grades.filter((g) => g.wrong_claim).length,
+  };
+}
+
+// Meta line
+document.getElementById("meta").textContent =
+  `${tickets.length} tickets from ${DATA.repo} (${tickets[0].date} to ${tickets[tickets.length - 1].date}) · ` +
+  `${DATA.model} · ${DATA.meko} · docs pinned at ${DATA.docs_ref.slice(0, 12)}`;
+
+// Tiles
+const all = Object.fromEntries(ORDER.map((s) => [s, stats(s, tickets)]));
+const same = Object.fromEntries(ORDER.map((s) => [s, stats(s, common)]));
+const repeatRows = common.filter((t) => t.role === "repeat");
+const perRepeat = Object.fromEntries(ORDER.map((s) => [s, avg(repeatRows, (t) => t.systems[s].tokens)]));
+function tile(label, value, sub) {
+  return el("div", { class: "card tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value),
+    el("div", { class: "sub" }, sub));
+}
+const tiles = document.getElementById("tiles");
+tiles.append(
+  tile("Repeats recognised, warm crew", `${all.warm.exact}/${all.warm.repeats}`,
+    `Cold crew: ${all.cold.exact}/${all.cold.repeats}. Same issue as the maintainers' duplicate link.`),
+  tile("Tokens per repeat", k(perRepeat.warm),
+    `Cold crew ${k(perRepeat.cold)}, stuffed prompt ${k(perRepeat.baseline)}, on ${repeatRows.length} repeats.`),
+  tile(`Cost of ${common.length} tickets`, usd(same.warm.cost),
+    `Stuffed prompt ${usd(same.baseline.cost)}, cold crew ${usd(same.cold.cost)}. API prices.`),
+);
+if (judged.length) {
+  tiles.append(tile("Replies matching the maintainers", `${same.warm.match}/${same.warm.judged}`,
+    `Cold crew ${same.cold.match}, stuffed prompt ${same.baseline.match}. Graded blind by a judge model.`));
+}
+
+// Chart: tokens per ticket by kind, the same tickets for every system
+const chartRoot = document.getElementById("chart");
+for (const s of ORDER) {
+  document.getElementById("legend").append(
+    el("span", {}, el("span", { class: "swatch", style: `background: var(--series-${s})` }), NAMES[s]));
+}
+function chart() {
+  const container = chartRoot;
+  const old = container.querySelector("svg");
+  if (old) old.remove();
+  const groups = KINDS.map(([kind, label]) => {
+    const rows = common.filter((t) => t.role === kind);
+    return { kind, label, n: rows.length, values: ORDER.map((s) => ({ s, v: avg(rows, (t) => t.systems[s].tokens) })) };
+  }).filter((g) => g.n);
+  const max = Math.max(...groups.flatMap((g) => g.values.map((x) => x.v)));
+  const step = max > 200000 ? 100000 : 50000;
+  const top = Math.ceil(max / step) * step;
+  // The drawing is as wide as its card, so the text keeps its size on a phone.
+  const W = Math.max(320, Math.min(container.clientWidth - 32, 1040)), left = 128, right = 64;
+  const barH = 14, gap = 2, groupGap = 20, axisH = 24;
+  const groupH = ORDER.length * barH + (ORDER.length - 1) * gap;
+  const H = axisH + groups.length * groupH + (groups.length - 1) * groupGap + 8;
+  const x = (v) => left + (v / top) * (W - left - right);
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Average tokens per ticket by ticket kind for each system; the table below has the same numbers.");
+  const add = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [a, v] of Object.entries(attrs)) n.setAttribute(a, v);
+    if (text !== undefined) n.textContent = text;
+    svg.append(n);
+    return n;
+  };
+  for (let t = 0; t <= top; t += step) {
+    add("line", { class: "gridline", x1: x(t), x2: x(t), y1: axisH - 6, y2: H - 4 });
+    add("text", { x: x(t), y: 14, "text-anchor": "middle" }, t === 0 ? "0" : `${t / 1000}k`);
+  }
+  const tip = document.getElementById("tooltip");
+  groups.forEach((g, gi) => {
+    const y0 = axisH + gi * (groupH + groupGap);
+    add("text", { class: "row-label", x: 0, y: y0 + groupH / 2 + 4 }, `${g.label} (${g.n})`);
+    g.values.forEach(({ s, v }, i) => {
+      const y = y0 + i * (barH + gap);
+      const w = Math.max(x(v) - left, 2);
+      const r = Math.min(4, w / 2);
+      const d = `M${left},${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${barH - 2 * r} a${r},${r} 0 0 1 -${r},${r} h-${w - r} z`;
+      const bar = add("path", { class: "bar", d, fill: `var(--series-${s})`, tabindex: 0,
+        "aria-label": `${NAMES[s]}, ${g.label.toLowerCase()}: ${k(v)} tokens per ticket` });
+      add("text", { x: left + w + 6, y: y + barH - 3 }, k(v));
+      const show = (event) => {
+        tip.textContent = `${NAMES[s]} · ${g.label.toLowerCase()}: ${k(v)} tokens per ticket (${g.n} tickets)`;
+        tip.style.display = "block";
+        const box = container.getBoundingClientRect();
+        const px = event && event.clientX ? event.clientX - box.left : (x(v) / W) * box.width;
+        const py = event && event.clientY ? event.clientY - box.top : (y / H) * box.height + 40;
+        tip.style.left = `${Math.min(px + 12, box.width - tip.offsetWidth - 8)}px`;
+        tip.style.top = `${py + 16}px`;
+      };
+      bar.addEventListener("mousemove", show);
+      bar.addEventListener("focus", () => show());
+      bar.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+      bar.addEventListener("blur", () => { tip.style.display = "none"; });
+    });
+  });
+  add("line", { class: "baseline-axis", x1: left, x2: left, y1: axisH - 6, y2: H - 4 });
+  container.append(svg);
+}
+chart();
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(chart, 150); });
+document.getElementById("chart-caption").textContent =
+  `Average over the ${common.length} tickets all three systems ran, by kind. All runs used the same model and docs.`;
+
+// Comparison table
+(function compare() {
+  const table = document.getElementById("compare");
+  const head = ["System", "Right", "Repeats, exact", "Tokens per ticket", "Cost", "Time per ticket", "Meko calls"];
+  if (judged.length) head.push("Replies match / partial", "Wrong claims");
+  table.append(el("thead", {}, el("tr", {}, head.map((h, i) => el("th", { class: i ? "num" : "", scope: "col" }, h)))));
+  const body = el("tbody");
+  for (const s of ORDER) {
+    const st = same[s];
+    const cells = [
+      el("th", { scope: "row", class: "sys-name" }, el("span", { class: "swatch", style: `background: var(--series-${s})` }), NAMES[s]),
+      el("td", { class: "num" }, `${st.right}/${st.n}`),
+      el("td", { class: "num" }, `${st.exact}/${st.repeats}`),
+      el("td", { class: "num" }, k(st.tokens)),
+      el("td", { class: "num" }, usd(st.cost)),
+      el("td", { class: "num" }, `${Math.round(st.seconds)} s`),
+      el("td", { class: "num" }, s === "baseline" ? "–" : st.calls.toFixed(1)),
+    ];
+    if (judged.length) {
+      cells.push(el("td", { class: "num" }, `${st.match} / ${st.partial} of ${st.judged}`), el("td", { class: "num" }, st.wrong));
+    }
+    body.append(el("tr", {}, cells));
+  }
+  table.append(body);
+  document.getElementById("compare-caption").textContent =
+    `The ${common.length} tickets all three ran. "Right": a repeat named the right issue; a first report or an unrelated ` +
+    `issue was not called a known one. The stuffed prompt holds all uv docs and every earlier ticket with the maintainers' reply.`;
+})();
+
+// Reuse list
+(function reuse() {
+  const list = document.getElementById("reuse");
+  const byNumber = Object.fromEntries(tickets.map((t) => [t.number, t]));
+  const rows = tickets.filter((t) => t.reused_from);
+  if (!rows.length) { list.append(el("li", {}, "No repeat reused a learning in this run.")); return; }
+  for (const t of rows) {
+    const w = t.systems.warm, c = t.systems.cold, src = byNumber[t.reused_from];
+    list.append(el("li", {},
+      el("a", { href: t.url }, `uv#${t.number}`), ` (${t.date}) reused the fix learned from `,
+      el("a", { href: src ? src.url : `https://github.com/astral-sh/uv/issues/${t.reused_from}` }, `uv#${t.reused_from}`),
+      src ? ` (${src.date})` : "", " ", mark(w.exact, w.exact ? "exact" : `named uv#${w.known_issue}`),
+      el("span", { class: "meta" }, ` · ${k(w.tokens)} tokens, ${w.meko_calls} Meko calls` +
+        (c ? ` (cold: ${k(c.tokens)}, ${c.meko_calls})` : ""))));
+  }
+})();
+
+// Ticket stream
+(function stream() {
+  const root = document.getElementById("tickets");
+  root.append(el("div", { class: "head", "aria-hidden": "true" },
+    el("span", { class: "date" }, "Opened"), el("span", {}, "Issue"), el("span", {}, "Title"), el("span", { class: "kind" }, "Kind"),
+    ORDER.map((s) => el("span", { class: "c" }, SHORT[s])), el("span", { class: "num tok" }, "Warm tokens")));
+  const verdictText = (v) => v ? `${v.verdict}${v.known_issue ? ` uv#${v.known_issue}` : ""}` : "not run";
+  for (const t of tickets) {
+    const summary = el("summary", {},
+      el("span", { class: "date meta" }, t.date),
+      el("span", { class: "mono" }, `#${t.number}`),
+      el("span", { class: "title" }, t.title),
+      el("span", { class: "kind" }, el("span", { class: "pill" }, t.role)),
+      ORDER.map((s) => el("span", { class: "c", "aria-label": `${NAMES[s]}: ${t.systems[s] ? (t.systems[s].correct ? "right" : "wrong") : "not run"}` },
+        t.systems[s] ? mark(t.systems[s].correct) : el("span", { class: "meta" }, "–"))),
+      el("span", { class: "num tok" }, t.systems.warm ? k(t.systems.warm.tokens) : "–"));
+    const trace = el("div", { class: "trace" },
+      el("div", {}, el("a", { href: t.url }, `Open uv#${t.number} on GitHub`),
+        t.role === "repeat" ? el("span", { class: "meta" }, ` · the maintainers closed it as a duplicate of uv#${t.expect}`) : ""));
+    for (const s of ORDER) {
+      const v = t.systems[s];
+      if (!v) { trace.append(el("div", {}, el("h4", {}, NAMES[s]), el("span", { class: "meta" }, "Not run on this ticket."))); continue; }
+      const grade = t.grades && t.grades[s];
+      const block = el("div", { class: "card" },
+        el("h4", {}, NAMES[s]),
+        el("div", {}, `Verdict: ${verdictText(v)} `, mark(v.correct, v.correct ? "right" : "wrong"),
+          el("span", { class: "meta" }, ` · ${k(v.tokens)} tokens · ${usd(v.cost, 4)} · ${Math.round(v.seconds)} s`)),
+        grade ? el("div", { class: "why" }, `Judge: ${grade.resolution}${grade.wrong_claim ? ", wrong claim" : ""}. ${grade.why}`) : null,
+        v.reply ? el("p", { class: "reply" }, v.reply) : null);
+      if (s !== "baseline") {
+        const steps = el("ol");
+        for (const r of v.runs) {
+          const calls = r.calls.map((c) => el("div", { class: "mono" }, `${c.tool}${c.source ? ` [${c.source}]` : ""}${c.query ? `: ${c.query}` : ""}`));
+          steps.append(el("li", {}, el("strong", {}, r.role), el("span", { class: "meta" }, ` · ${k(r.tokens)} tokens · ${Math.round(r.seconds)} s`),
+            calls, r.answer.reasoning ? el("div", { class: "why" }, `Reasoning: ${r.answer.reasoning}`) : null,
+            r.answer.plan ? el("div", { class: "why" }, `Plan: ${r.answer.plan}`) : null));
+        }
+        block.append(steps);
+      }
+      if (v.learning) block.append(el("div", { class: "why" }, `Learning saved and promoted: ${v.learning}`));
+      if (v.shortfall) {
+        block.append(el("div", { class: "why" }, `Shortfall: the learning of uv#${v.shortfall.canonical} ranked ` +
+          `${JSON.stringify(v.shortfall.rank_before)} before and ${JSON.stringify(v.shortfall.rank_after)} after (per triage query; null: not found).`));
+      }
+      trace.append(block);
+    }
+    root.append(el("details", {}, summary, trace));
+  }
+})();
+
+// Notes
+(function notes() {
+  const list = document.getElementById("notes");
+  [
+    "Tickets: closed uv issues in date order. A repeat is one the maintainers closed as a duplicate of an earlier ticket in the stream; a first report is the issue they pointed to; an unrelated issue is one no earlier ticket covers.",
+    "Each agent is a headless Claude Code run in an empty folder with only its role's Meko tools, so its tokens are its own work (including Claude Code's own system prompt). Prices are API prices for Claude Haiku 5.5, prompt caching included.",
+    "Cold and warm crews run the same agents on the same docs; only the cold crew never looks up or saves a learning. A learning is saved only from the maintainers' real reply, after the review: the human decision.",
+    "The stuffed prompt is one call per ticket with all uv docs (about 207k tokens) and every earlier ticket's opening and maintainer reply. It grows by about 330 tokens per earlier ticket.",
+    "The judge (the same model) grades the three drafts blind, in a shuffled order per ticket, against the maintainers' replies on the issue and, for a repeat, on the issue it duplicates.",
+    "The docs are today's, not the docs as they were when each issue was opened; every system gets the same docs.",
+  ].forEach((text) => list.append(el("li", {}, text)));
+})();
+</script>
+</body>
+</html>

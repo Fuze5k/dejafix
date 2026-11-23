@@ -117,6 +117,35 @@ Answer with one JSON object and nothing else:
 {"verdict": "known"|"docs"|"new", "known_issue": <N or null>, "reply": "<markdown, under 150 words>",
 "sources": [<doc sections or uv#N>], "reasoning": "<two sentences>"}""",
     },
+    # Grades drafted replies against the uv maintainers' real reply: no Meko, no tools.
+    "judge": {
+        "model": "haiku",
+        "tools": [],
+        "mcp": False,
+        "schema": _schema(
+            grades={
+                "type": "array",
+                "items": _schema(
+                    label={"type": "string", "enum": ["A", "B", "C"]},
+                    resolution={"type": "string", "enum": ["match", "partial", "miss"]},
+                    wrong_claim={"type": "boolean"},
+                    why=TEXT,
+                ),
+            }
+        ),
+        "prompt": """You grade draft replies to a uv issue against what the uv maintainers actually said.
+You get the issue, the maintainers' replies (the ground truth) and drafts A, B and C, written by
+different systems before any maintainer replied, in random order. Grade each draft on its own:
+- resolution: "match" when it gives the maintainers' resolution or one they would accept as the same
+  (the same cause and the same fix, workaround, status, or pointer to the same tracking issue);
+  "partial" when it gets the cause or the direction right but misses or blurs the key point;
+  "miss" when it gives a different resolution, or none.
+- wrong_claim: true when it states something the maintainers' replies contradict or that is plainly
+  false about uv (a wrong cause, a fix that does not work, a feature that does not exist). Extra detail
+  you cannot check is not a wrong claim.
+- why: one sentence.
+Judge substance, not tone or length. Grade all three drafts, one entry each.""",
+    },
 }
 
 
